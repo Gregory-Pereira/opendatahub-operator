@@ -10,7 +10,8 @@ import (
 )
 
 // RegisterWebhooks registers the webhooks for DataScienceCluster v1.
-func RegisterWebhooks(mgr ctrl.Manager) error {
+// The platformValidator is injected to enable platform-specific validation.
+func RegisterWebhooks(mgr ctrl.Manager, platformValidator admission.Handler) error {
 	// Register the conversion webhook
 	if err := ctrl.NewWebhookManagedBy(mgr).For(&dscv1.DataScienceCluster{}).Complete(); err != nil {
 		return err
@@ -18,9 +19,10 @@ func RegisterWebhooks(mgr ctrl.Manager) error {
 
 	// Register the validating webhook
 	if err := (&Validator{
-		Client:  mgr.GetAPIReader(),
-		Name:    "datasciencecluster-v1-validating",
-		Decoder: admission.NewDecoder(mgr.GetScheme()),
+		Client:            mgr.GetAPIReader(),
+		Name:              "datasciencecluster-v1-validating",
+		Decoder:           admission.NewDecoder(mgr.GetScheme()),
+		PlatformValidator: platformValidator,
 	}).SetupWithManager(mgr); err != nil {
 		return err
 	}

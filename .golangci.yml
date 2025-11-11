@@ -99,6 +99,9 @@ linters:
         - gomega.AsyncAssertion
         - labels.Selector
         - manager.Manager
+        - platform.Platform
+        - platform.Validator
+        - admission.Handler
     lll:
       line-length: 180
     nolintlint:

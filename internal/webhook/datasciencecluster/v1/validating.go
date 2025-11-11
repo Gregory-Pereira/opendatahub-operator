@@ -26,9 +26,10 @@ import (
 // Validator implements webhook.AdmissionHandler for DataScienceCluster v1 validation webhooks.
 // It enforces singleton creation rules for DataScienceCluster resources and always allows their deletion.
 type Validator struct {
-	Client  client.Reader
-	Name    string
-	Decoder admission.Decoder
+	Client            client.Reader
+	Name              string
+	Decoder           admission.Decoder
+	PlatformValidator admission.Handler
 }
 
 // Assert that Validator implements admission.Handler interface.
@@ -63,6 +64,15 @@ func (v *Validator) Handle(ctx context.Context, req admission.Request) admission
 	log := logf.FromContext(ctx)
 	ctx = logf.IntoContext(ctx, log)
 
+	// Run platform-specific validation first
+	if v.PlatformValidator != nil {
+		resp := v.PlatformValidator.Handle(ctx, req)
+		if !resp.Allowed {
+			return resp
+		}
+	}
+
+	// Run version-specific validation
 	allowMessage := fmt.Sprintf("Operation %s on %s v1 allowed", req.Operation, req.Kind.Kind)
 
 	if req.Kind.Kind != gvk.DataScienceClusterV1.Kind || req.Kind.Group != gvk.DataScienceClusterV1.Group || req.Kind.Version != gvk.DataScienceClusterV1.Version {

@@ -9,6 +9,8 @@ const (
 	SelfManagedRhoai common.Platform = "OpenShift AI Self-Managed"
 	// OpenDataHub defines display name in csv.
 	OpenDataHub common.Platform = "Open Data Hub"
+	// Vanilla defines display name for vanilla Kubernetes deployments.
+	Vanilla common.Platform = "Vanilla Kubernetes"
 
 	// DefaultNotebooksNamespaceODH defines default namespace for notebooks.
 	DefaultNotebooksNamespaceODH = "opendatahub"

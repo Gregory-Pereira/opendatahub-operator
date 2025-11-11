@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -46,7 +45,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -58,7 +56,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -73,16 +70,12 @@ import (
 	infrav1 "github.com/opendatahub-io/opendatahub-operator/v2/api/infrastructure/v1"
 	infrav1alpha1 "github.com/opendatahub-io/opendatahub-operator/v2/api/infrastructure/v1alpha1"
 	serviceApi "github.com/opendatahub-io/opendatahub-operator/v2/api/services/v1alpha1"
-	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
-	dscctrl "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/datasciencecluster"
-	dscictrl "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/dscinitialization"
-	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/logger"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/factory"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/resources"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/upgrade"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/utils/flags"
 
 	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/dashboard"
@@ -143,43 +136,6 @@ func init() { //nolint:gochecknoinits
 	utilruntime.Must(gwapiv1.Install(scheme))
 }
 
-func initComponents(_ context.Context, p common.Platform) error {
-	return cr.ForEach(func(ch cr.ComponentHandler) error {
-		return ch.Init(p)
-	})
-}
-
-func initServices(_ context.Context, p common.Platform) error {
-	return sr.ForEach(func(sh sr.ServiceHandler) error {
-		return sh.Init(p)
-	})
-}
-
-// Create a config struct with viper's mapstructure.
-type OperatorConfig struct {
-	MetricsAddr         string `mapstructure:"metrics-bind-address"`
-	HealthProbeAddr     string `mapstructure:"health-probe-bind-address"`
-	LeaderElection      bool   `mapstructure:"leader-elect"`
-	MonitoringNamespace string `mapstructure:"dsc-monitoring-namespace"`
-	LogMode             string `mapstructure:"log-mode"`
-	PprofAddr           string `mapstructure:"pprof-bind-address"`
-
-	// Zap logging configuration
-	ZapDevel        bool   `mapstructure:"zap-devel"`
-	ZapEncoder      string `mapstructure:"zap-encoder"`
-	ZapLogLevel     string `mapstructure:"zap-log-level"`
-	ZapStacktrace   string `mapstructure:"zap-stacktrace-level"`
-	ZapTimeEncoding string `mapstructure:"zap-time-encoding"`
-}
-
-func LoadConfig() (*OperatorConfig, error) {
-	var operatorConfig OperatorConfig
-	if err := viper.Unmarshal(&operatorConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal operator manager config: %w", err)
-	}
-	return &operatorConfig, nil
-}
-
 func main() { //nolint:funlen,maintidx,gocyclo
 	// Viper settings
 	viper.SetEnvPrefix("ODH_MANAGER")
@@ -199,7 +155,7 @@ func main() { //nolint:funlen,maintidx,gocyclo
 		os.Exit(1)
 	}
 
-	oconfig, err := LoadConfig()
+	oconfig, err := cluster.LoadConfig()
 	if err != nil {
 		fmt.Printf("Error loading configuration: %s", err.Error())
 		os.Exit(1)
@@ -243,20 +199,28 @@ func main() { //nolint:funlen,maintidx,gocyclo
 
 	// Get operator platform
 	release := cluster.GetRelease()
-	platform := release.Name
+	platformType := release.Name
+	platform := platformType // Keep for backward compatibility with cache config
 
-	if err := initServices(ctx, platform); err != nil {
-		setupLog.Error(err, "unable to init services")
+	// Create platform instance
+	plat, err := factory.New(platformType, setupClient, oconfig)
+	if err != nil {
+		setupLog.Error(err, "unable to create platform")
+		os.Exit(1)
+	}
+	setupLog.Info("Platform initialized", "type", plat.String())
+
+	// Initialize platform (handles services and components initialization)
+	if err := plat.Init(ctx); err != nil {
+		setupLog.Error(err, "unable to initialize platform")
 		os.Exit(1)
 	}
 
-	if err := initComponents(ctx, platform); err != nil {
-		setupLog.Error(err, "unable to init components")
+	// Perform platform-specific upgrade operations
+	if err := plat.Upgrade(ctx); err != nil {
+		setupLog.Error(err, "unable to perform platform upgrade")
 		os.Exit(1)
 	}
-
-	// get old release version before we create default DSCI CR
-	oldReleaseVersion, _ := upgrade.GetDeployedRelease(ctx, setupClient)
 
 	secretCache, err := createSecretCacheConfig(platform)
 	if err != nil {
@@ -368,122 +332,16 @@ func main() { //nolint:funlen,maintidx,gocyclo
 		os.Exit(1)
 	}
 
-	// Register all webhooks using the helper
-	if err := webhook.RegisterAllWebhooks(mgr); err != nil {
+	// Register all webhooks using the helper (platform validators are injected into DSCI/DSC webhooks)
+	if err := webhook.RegisterAllWebhooks(mgr, plat); err != nil {
 		setupLog.Error(err, "unable to register webhooks")
 		os.Exit(1)
 	}
 
-	if err = (&dscictrl.DSCInitializationReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("dscinitialization-controller"),
-	}).SetupWithManager(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DSCInitiatlization")
+	// Setup platform-specific reconcilers and runtime logic
+	if err := plat.Run(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to setup platform runtime")
 		os.Exit(1)
-	}
-
-	if err = dscctrl.NewDataScienceClusterReconciler(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DataScienceCluster")
-		os.Exit(1)
-	}
-
-	// Initialize service reconcilers
-	if err := CreateServiceReconcilers(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to create service controllers")
-		os.Exit(1)
-	}
-
-	// Initialize component reconcilers
-	if err = CreateComponentReconcilers(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to create component controllers")
-		os.Exit(1)
-	}
-
-	// Check if user opted for disabling DSC configuration
-	disableDSCConfig, existDSCConfig := os.LookupEnv("DISABLE_DSC_CONFIG")
-	if existDSCConfig && disableDSCConfig != "false" {
-		setupLog.Info("DSCI auto creation is disabled")
-	} else {
-		var createDefaultDSCIFunc manager.RunnableFunc = func(ctx context.Context) error {
-			err := upgrade.CreateDefaultDSCI(ctx, setupClient, platform, oconfig.MonitoringNamespace)
-			if err != nil {
-				setupLog.Error(err, "unable to create initial setup for the operator")
-			}
-			return err
-		}
-		err := mgr.Add(createDefaultDSCIFunc)
-		if err != nil {
-			setupLog.Error(err, "error scheduling DSCI creation")
-			os.Exit(1)
-		}
-	}
-
-	// Create default DSC CR for managed RHOAI
-	if platform == cluster.ManagedRhoai {
-		var createDefaultDSCFunc manager.RunnableFunc = func(ctx context.Context) error {
-			err := upgrade.CreateDefaultDSC(ctx, setupClient)
-			if err != nil {
-				setupLog.Error(err, "unable to create default DSC CR by the operator")
-			}
-			return err
-		}
-		err := mgr.Add(createDefaultDSCFunc)
-		if err != nil {
-			setupLog.Error(err, "error scheduling DSC creation")
-			os.Exit(1)
-		}
-	}
-
-	var createDefaultGatewayFunc manager.RunnableFunc = func(ctx context.Context) error {
-		defaultGateway := &serviceApi.GatewayConfig{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: serviceApi.GatewayInstanceName,
-			},
-			Spec: serviceApi.GatewayConfigSpec{
-				Certificate: &infrav1.CertificateSpec{
-					Type:       infrav1.OpenshiftDefaultIngress,
-					SecretName: "default-gateway-tls",
-				},
-			},
-		}
-
-		existingGateway := &serviceApi.GatewayConfig{}
-		err := setupClient.Get(ctx, client.ObjectKey{Name: serviceApi.GatewayInstanceName}, existingGateway)
-		if err != nil {
-			if client.IgnoreNotFound(err) == nil {
-				if createErr := setupClient.Create(ctx, defaultGateway); createErr != nil {
-					setupLog.Error(createErr, "unable to create default Gateway CR")
-					return createErr
-				}
-				setupLog.Info("Created default Gateway CR", "name", serviceApi.GatewayInstanceName)
-			} else {
-				setupLog.Error(err, "error checking for existing Gateway CR")
-				return err
-			}
-		} else {
-			setupLog.Info("Default Gateway CR already exists", "name", serviceApi.GatewayInstanceName)
-		}
-
-		return nil
-	}
-	err = mgr.Add(createDefaultGatewayFunc)
-	if err != nil {
-		setupLog.Error(err, "error scheduling Gateway creation")
-		os.Exit(1)
-	}
-
-	// Cleanup resources from previous v2 releases
-	var cleanExistingResourceFunc manager.RunnableFunc = func(ctx context.Context) error {
-		if err = upgrade.CleanupExistingResource(ctx, setupClient, platform, oldReleaseVersion); err != nil {
-			setupLog.Error(err, "unable to perform cleanup")
-		}
-		return err
-	}
-
-	err = mgr.Add(cleanExistingResourceFunc)
-	if err != nil {
-		setupLog.Error(err, "error remove deprecated resources from previous version")
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -547,29 +405,4 @@ func createODHGeneralCacheConfig(platform common.Platform) (map[string]cache.Con
 	namespaceConfigs["openshift-ingress"] = cache.Config{}   // for gateway auth proxy resources
 
 	return namespaceConfigs, nil
-}
-
-func CreateComponentReconcilers(ctx context.Context, mgr manager.Manager) error {
-	l := logf.FromContext(ctx)
-
-	return cr.ForEach(func(ch cr.ComponentHandler) error {
-		l.Info("creating reconciler", "type", "component", "name", ch.GetName())
-		if err := ch.NewComponentReconciler(ctx, mgr); err != nil {
-			return fmt.Errorf("error creating %s component reconciler: %w", ch.GetName(), err)
-		}
-
-		return nil
-	})
-}
-
-func CreateServiceReconcilers(ctx context.Context, mgr manager.Manager) error {
-	log := logf.FromContext(ctx)
-
-	return sr.ForEach(func(sh sr.ServiceHandler) error {
-		log.Info("creating reconciler", "type", "service", "name", sh.GetName())
-		if err := sh.NewReconciler(ctx, mgr); err != nil {
-			return fmt.Errorf("error creating %s service reconciler: %w", sh.GetName(), err)
-		}
-		return nil
-	})
 }

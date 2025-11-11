@@ -72,6 +72,18 @@ type DSCInitializationReconciler struct {
 	Recorder record.EventRecorder
 }
 
+// NewDSCInitializationReconciler creates a new DSCInitialization reconciler and sets it up with the manager.
+func NewDSCInitializationReconciler(ctx context.Context, mgr ctrl.Manager) error {
+	if err := (&DSCInitializationReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("dscinitialization-controller"),
+	}).SetupWithManager(ctx, mgr); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Reconcile contains controller logic specific to DSCInitialization instance updates.
 func (r *DSCInitializationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) { //nolint:funlen,gocyclo,maintidx
 	log := logf.FromContext(ctx).WithName("DSCInitialization")

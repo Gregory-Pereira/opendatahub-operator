@@ -14,16 +14,34 @@ import (
 	kueuewebhook "github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook/kueue"
 	notebookwebhook "github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook/notebook"
 	serving "github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook/serving"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform"
 )
 
 // RegisterAllWebhooks registers all webhook setup functions with the given manager.
+// Platform validators are injected into DSCI and DSC webhooks for platform-specific validation.
 // Returns the first error encountered during registration, or nil if all succeed.
-func RegisterAllWebhooks(mgr ctrl.Manager) error {
+func RegisterAllWebhooks(mgr ctrl.Manager, plat platform.Platform) error {
+	// Get platform-specific validators
+	platformValidator := plat.Validator()
+	dsciValidator := platformValidator.DSCInitializationValidator()
+	dscValidator := platformValidator.DataScienceClusterValidator()
+
+	// Register webhooks with platform validators injected where needed
+	if err := dscv1webhook.RegisterWebhooks(mgr, dscValidator); err != nil {
+		return err
+	}
+	if err := dscv2webhook.RegisterWebhooks(mgr, dscValidator); err != nil {
+		return err
+	}
+	if err := dsciv1webhook.RegisterWebhooks(mgr, dsciValidator); err != nil {
+		return err
+	}
+	if err := dsciv2webhook.RegisterWebhooks(mgr, dsciValidator); err != nil {
+		return err
+	}
+
+	// Register other webhooks (no platform validation needed)
 	webhookRegistrations := []func(ctrl.Manager) error{
-		dscv1webhook.RegisterWebhooks,
-		dscv2webhook.RegisterWebhooks,
-		dsciv1webhook.RegisterWebhooks,
-		dsciv2webhook.RegisterWebhooks,
 		hardwareprofilewebhook.RegisterWebhooks,
 		kueuewebhook.RegisterWebhooks,
 		serving.RegisterWebhooks,
@@ -35,5 +53,6 @@ func RegisterAllWebhooks(mgr ctrl.Manager) error {
 			return err
 		}
 	}
+
 	return nil
 }
