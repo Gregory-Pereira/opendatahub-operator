@@ -3,10 +3,14 @@ package platform
 import (
 	"context"
 
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
+)
+
+const (
+	// LeaderElectionID is the resource name used for leader election across all platforms.
+	LeaderElectionID = "07ed84f7.opendatahub.io"
 )
 
 // Platform defines platform-specific behavior for the operator.
@@ -23,8 +27,9 @@ type Platform interface {
 	Init(ctx context.Context) error
 
 	// Run executes platform-specific runtime logic.
-	// This is called during the main operator reconciliation loop.
-	Run(ctx context.Context, mgr ctrl.Manager) error
+	// This creates the controller-runtime manager, registers webhooks and controllers,
+	// and starts the manager (blocking until shutdown).
+	Run(ctx context.Context) error
 
 	// Validator returns the platform-specific validator for webhooks.
 	// The validator provides admission handlers for DSCInitialization and DataScienceCluster.

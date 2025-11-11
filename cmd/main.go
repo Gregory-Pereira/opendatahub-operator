@@ -23,7 +23,6 @@ import (
 
 	ocappsv1 "github.com/openshift/api/apps/v1" //nolint:importas //reason: conflicts with appsv1 "k8s.io/api/apps/v1"
 	buildv1 "github.com/openshift/api/build/v1"
-	configv1 "github.com/openshift/api/config/v1"
 	consolev1 "github.com/openshift/api/console/v1"
 	imagev1 "github.com/openshift/api/image/v1"
 	oauthv1 "github.com/openshift/api/oauth/v1"
@@ -39,28 +38,20 @@ import (
 	"github.com/spf13/viper"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv1 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
@@ -70,12 +61,9 @@ import (
 	infrav1 "github.com/opendatahub-io/opendatahub-operator/v2/api/infrastructure/v1"
 	infrav1alpha1 "github.com/opendatahub-io/opendatahub-operator/v2/api/infrastructure/v1alpha1"
 	serviceApi "github.com/opendatahub-io/opendatahub-operator/v2/api/services/v1alpha1"
-	"github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/logger"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/factory"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/resources"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/utils/flags"
 
 	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/dashboard"
@@ -200,10 +188,9 @@ func main() { //nolint:funlen,maintidx,gocyclo
 	// Get operator platform
 	release := cluster.GetRelease()
 	platformType := release.Name
-	platform := platformType // Keep for backward compatibility with cache config
 
 	// Create platform instance
-	plat, err := factory.New(platformType, setupClient, oconfig)
+	plat, err := factory.New(platformType, setupClient, oconfig, scheme)
 	if err != nil {
 		setupLog.Error(err, "unable to create platform")
 		os.Exit(1)
@@ -222,187 +209,10 @@ func main() { //nolint:funlen,maintidx,gocyclo
 		os.Exit(1)
 	}
 
-	secretCache, err := createSecretCacheConfig(platform)
-	if err != nil {
-		setupLog.Error(err, "unable to get application namespace into cache")
+	// Run platform (creates manager, registers webhooks, starts reconcilers)
+	setupLog.Info("Starting platform runtime", "platform", plat.String())
+	if err := plat.Run(ctx); err != nil {
+		setupLog.Error(err, "problem running platform")
 		os.Exit(1)
 	}
-
-	oDHCache, err := createODHGeneralCacheConfig(platform)
-	if err != nil {
-		setupLog.Error(err, "unable to get application namespace into cache")
-		os.Exit(1)
-	}
-
-	cacheOptions := cache.Options{
-		Scheme: scheme,
-		ByObject: map[client.Object]cache.ByObject{
-			// Cannot find a label on various screts, so we need to watch all secrets
-			// this include, monitoring, dashboard, trustcabundle default cert etc for these NS
-			&corev1.Secret{}: {
-				Namespaces: secretCache,
-			},
-			// it is hard to find a label can be used for both trustCAbundle configmap and inferenceservice-config and deletionCM
-			&corev1.ConfigMap{}: {
-				Namespaces: oDHCache,
-			},
-			// For domain to get OpenshiftIngress and default cert
-			&operatorv1.IngressController{}: {
-				Field: fields.Set{"metadata.name": "default"}.AsSelector(),
-			},
-			// For authentication CR "cluster"
-			&configv1.Authentication{}: {
-				Field: fields.Set{"metadata.name": cluster.ClusterAuthenticationObj}.AsSelector(),
-			},
-			// for prometheus and black-box deployment and ones we owns
-			&appsv1.Deployment{}: {
-				Namespaces: oDHCache,
-			},
-			// kueue + monitoring need prometheusrules
-			&promv1.PrometheusRule{}: {
-				Namespaces: oDHCache,
-			},
-			&promv1.ServiceMonitor{}: {
-				Namespaces: oDHCache,
-			},
-			&routev1.Route{}: {
-				Namespaces: oDHCache,
-			},
-			&networkingv1.NetworkPolicy{}: {
-				Namespaces: oDHCache,
-			},
-			&rbacv1.Role{}: {
-				Namespaces: oDHCache,
-			},
-			&rbacv1.RoleBinding{}: {
-				Namespaces: oDHCache,
-			},
-		},
-		DefaultTransform: func(in any) (any, error) {
-			// Nilcheck managed fields to avoid hitting https://github.com/kubernetes/kubernetes/issues/124337
-			if obj, err := meta.Accessor(in); err == nil && obj.GetManagedFields() != nil {
-				obj.SetManagedFields(nil)
-			}
-
-			return in, nil
-		},
-	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{ // single pod does not need to have LeaderElection
-		Scheme:  scheme,
-		Metrics: ctrlmetrics.Options{BindAddress: oconfig.MetricsAddr},
-		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
-			Port: 9443,
-			// TLSOpts: , // TODO: it was not set in the old code
-		}),
-		PprofBindAddress:       oconfig.PprofAddr,
-		HealthProbeBindAddress: oconfig.HealthProbeAddr,
-		Cache:                  cacheOptions,
-		LeaderElection:         oconfig.LeaderElection,
-		LeaderElectionID:       "07ed84f7.opendatahub.io",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
-		Client: client.Options{
-			Cache: &client.CacheOptions{
-				DisableFor: []client.Object{
-					resources.GvkToUnstructured(gvk.OpenshiftIngress),
-					&ofapiv1alpha1.Subscription{},
-					&authorizationv1.SelfSubjectRulesReview{},
-					&corev1.Pod{},
-					&userv1.Group{},
-					&ofapiv1alpha1.CatalogSource{},
-				},
-				// Set it to true so the cache-backed client reads unstructured objects
-				// or lists from the cache instead of a live lookup.
-				Unstructured: true,
-			},
-		},
-	})
-	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
-	}
-
-	// Register all webhooks using the helper (platform validators are injected into DSCI/DSC webhooks)
-	if err := webhook.RegisterAllWebhooks(mgr, plat); err != nil {
-		setupLog.Error(err, "unable to register webhooks")
-		os.Exit(1)
-	}
-
-	// Setup platform-specific reconcilers and runtime logic
-	if err := plat.Run(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to setup platform runtime")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
-
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctx); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
-}
-
-func getCommonCache(platform common.Platform) (map[string]cache.Config, error) {
-	namespaceConfigs := map[string]cache.Config{}
-
-	// networkpolicy need operator namespace
-	operatorNs, err := cluster.GetOperatorNamespace()
-	if err != nil {
-		return nil, err
-	}
-
-	namespaceConfigs[operatorNs] = cache.Config{}
-	namespaceConfigs["redhat-ods-monitoring"] = cache.Config{}
-
-	// Get application namespace from cluster config
-	appNamespace := cluster.GetApplicationNamespace()
-	namespaceConfigs[appNamespace] = cache.Config{}
-
-	// Add console link namespace for managed RHOAI
-	if platform == cluster.ManagedRhoai {
-		namespaceConfigs[cluster.NamespaceConsoleLink] = cache.Config{}
-	}
-
-	return namespaceConfigs, nil
-}
-
-func createSecretCacheConfig(platform common.Platform) (map[string]cache.Config, error) {
-	namespaceConfigs, err := getCommonCache(platform)
-	if err != nil {
-		return nil, err
-	}
-
-	namespaceConfigs["openshift-ingress"] = cache.Config{}
-
-	return namespaceConfigs, nil
-}
-
-func createODHGeneralCacheConfig(platform common.Platform) (map[string]cache.Config, error) {
-	namespaceConfigs, err := getCommonCache(platform)
-	if err != nil {
-		return nil, err
-	}
-
-	namespaceConfigs["openshift-operators"] = cache.Config{} // for dependent operators installed namespace
-	namespaceConfigs["openshift-ingress"] = cache.Config{}   // for gateway auth proxy resources
-
-	return namespaceConfigs, nil
 }
