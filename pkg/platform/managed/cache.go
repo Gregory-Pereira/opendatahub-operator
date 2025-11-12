@@ -29,7 +29,7 @@ func getCommonCacheNamespaces() (map[string]cache.Config, error) {
 		return nil, err
 	}
 	namespaceConfigs[operatorNs] = cache.Config{}
-	namespaceConfigs["redhat-ods-monitoring"] = cache.Config{}
+	namespaceConfigs[cluster.DefaultMonitoringNamespaceRHOAI] = cache.Config{}
 
 	appNamespace := cluster.GetApplicationNamespace()
 	namespaceConfigs[appNamespace] = cache.Config{}
@@ -46,7 +46,7 @@ func createSecretCacheNamespaces() (map[string]cache.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	namespaceConfigs["openshift-ingress"] = cache.Config{}
+	namespaceConfigs[cluster.OpenshiftIngressNamespace] = cache.Config{}
 	return namespaceConfigs, nil
 }
 
@@ -56,8 +56,8 @@ func createGeneralCacheNamespaces() (map[string]cache.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	namespaceConfigs["openshift-operators"] = cache.Config{}
-	namespaceConfigs["openshift-ingress"] = cache.Config{}
+	namespaceConfigs[cluster.OpenshiftOperatorsNamespace] = cache.Config{}
+	namespaceConfigs[cluster.OpenshiftIngressNamespace] = cache.Config{}
 	return namespaceConfigs, nil
 }
 

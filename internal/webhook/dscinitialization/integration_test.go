@@ -7,6 +7,8 @@ import (
 	"github.com/rs/xid"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	dsciv1 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v1"
 	dsciv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v2"
@@ -92,8 +94,16 @@ func TestDSCIWebhook_Integration(t *testing.T) {
 			ctx, env, teardown := envtestutil.SetupEnvAndClient(
 				t,
 				[]envt.RegisterWebhooksFn{
-					v1webhook.RegisterWebhooks,
-					v2webhook.RegisterWebhooks,
+					func(mgr manager.Manager) error {
+						return v1webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return v2webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
 				},
 				[]envt.RegisterControllersFn{},
 				envtestutil.DefaultWebhookTimeout,

@@ -9,7 +9,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -17,7 +16,7 @@ import (
 	webhookutils "github.com/opendatahub-io/opendatahub-operator/v2/pkg/webhook"
 )
 
-//+kubebuilder:webhook:path=/validate-dscinitialization-v1,matchPolicy=Exact,mutating=false,failurePolicy=fail,sideEffects=None,groups=dscinitialization.opendatahub.io,resources=dscinitializations,verbs=create;delete,versions=v1,name=dscinitialization-v1-validator.opendatahub.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-dscinitialization-v1,matchPolicy=Exact,mutating=false,failurePolicy=fail,sideEffects=None,groups=dscinitialization.opendatahub.io,resources=dscinitializations,verbs=create;delete,versions=v1,name=dscinitialization-v1-validator.opendatahub.io,admissionReviewVersions=v1
 //nolint:lll
 
 // Validator implements webhook.AdmissionHandler for DSCInitialization v1 validation webhooks.
@@ -57,9 +56,6 @@ func (v *Validator) SetupWithManager(mgr ctrl.Manager) error {
 // Returns:
 //   - admission.Response: The result of the admission check, indicating whether the operation is allowed or denied.
 func (v *Validator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	log := logf.FromContext(ctx)
-	ctx = logf.IntoContext(ctx, log)
-
 	// Run platform-specific validation first
 	if v.PlatformValidator != nil {
 		resp := v.PlatformValidator.Handle(ctx, req)

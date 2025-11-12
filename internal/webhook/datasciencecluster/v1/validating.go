@@ -20,7 +20,7 @@ import (
 	webhookutils "github.com/opendatahub-io/opendatahub-operator/v2/pkg/webhook"
 )
 
-//+kubebuilder:webhook:path=/validate-datasciencecluster-v1,matchPolicy=Exact,mutating=false,failurePolicy=fail,sideEffects=None,groups=datasciencecluster.opendatahub.io,resources=datascienceclusters,verbs=create;update,versions=v1,name=datasciencecluster-v1-validator.opendatahub.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-datasciencecluster-v1,matchPolicy=Exact,mutating=false,failurePolicy=fail,sideEffects=None,groups=datasciencecluster.opendatahub.io,resources=datascienceclusters,verbs=create;update,versions=v1,name=datasciencecluster-v1-validator.opendatahub.io,admissionReviewVersions=v1
 //nolint:lll
 
 // Validator implements webhook.AdmissionHandler for DataScienceCluster v1 validation webhooks.
@@ -61,9 +61,6 @@ func (v *Validator) SetupWithManager(mgr ctrl.Manager) error {
 // Returns:
 //   - admission.Response: The result of the admission check, indicating whether the operation is allowed or denied.
 func (v *Validator) Handle(ctx context.Context, req admission.Request) admission.Response {
-	log := logf.FromContext(ctx)
-	ctx = logf.IntoContext(ctx, log)
-
 	// Run platform-specific validation first
 	if v.PlatformValidator != nil {
 		resp := v.PlatformValidator.Handle(ctx, req)

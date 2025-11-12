@@ -1,10 +1,10 @@
 package factory
 
 import (
+	"errors"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
@@ -16,21 +16,24 @@ import (
 )
 
 // New creates a Platform instance based on the provided platform type.
-// The client parameter provides access to the Kubernetes API for platform initialization.
-// The oconfig parameter contains operator configuration including monitoring namespace.
 // The scheme parameter is used to create the controller-runtime manager with proper type registration.
+// The oconfig parameter contains operator configuration including rest.Config for cluster connection.
 // Supported platforms: OpenDataHub, SelfManagedRhoai, ManagedRhoai, Vanilla.
 // Returns an error if the platform type is unknown or if platform initialization fails.
-func New(platformType common.Platform, cli client.Client, oconfig *cluster.OperatorConfig, scheme *runtime.Scheme) (platform.Platform, error) {
+func New(platformType common.Platform, scheme *runtime.Scheme, oconfig *cluster.OperatorConfig) (platform.Platform, error) {
+	if oconfig.RestConfig == nil {
+		return nil, errors.New("RestConfig must be set in OperatorConfig")
+	}
+
 	switch platformType {
 	case cluster.SelfManagedRhoai:
-		return selfmanaged.New(cli, oconfig, scheme)
+		return selfmanaged.New(scheme, oconfig)
 	case cluster.OpenDataHub:
-		return opendatahub.New(cli, oconfig, scheme)
+		return opendatahub.New(scheme, oconfig)
 	case cluster.ManagedRhoai:
-		return managed.New(cli, oconfig, scheme)
+		return managed.New(scheme, oconfig)
 	case cluster.Vanilla:
-		return vanilla.New(cli, oconfig, scheme)
+		return vanilla.New(scheme, oconfig)
 	default:
 		return nil, fmt.Errorf("unknown platform type: %s (valid types: %s, %s, %s, %s)",
 			platformType,

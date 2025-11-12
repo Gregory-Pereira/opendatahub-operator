@@ -124,7 +124,7 @@ func init() { //nolint:gochecknoinits
 	utilruntime.Must(gwapiv1.Install(scheme))
 }
 
-func main() { //nolint:funlen,maintidx,gocyclo
+func main() { //nolint:funlen
 	// Viper settings
 	viper.SetEnvPrefix("ODH_MANAGER")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -166,13 +166,16 @@ func main() { //nolint:funlen,maintidx,gocyclo
 	// root context
 	ctx := ctrl.SetupSignalHandler()
 	ctx = logf.IntoContext(ctx, setupLog)
-	// Create new uncached client to run initial setup
+
+	// Get rest.Config and attach to OperatorConfig
 	setupCfg, err := config.GetConfig()
 	if err != nil {
 		setupLog.Error(err, "error getting config for setup")
 		os.Exit(1)
 	}
+	oconfig.RestConfig = setupCfg
 
+	// Create new uncached client to run initial setup
 	setupClient, err := client.New(setupCfg, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "error getting client for setup")
@@ -187,10 +190,9 @@ func main() { //nolint:funlen,maintidx,gocyclo
 
 	// Get operator platform
 	release := cluster.GetRelease()
-	platformType := release.Name
 
 	// Create platform instance
-	plat, err := factory.New(platformType, setupClient, oconfig, scheme)
+	plat, err := factory.New(release.Name, scheme, oconfig)
 	if err != nil {
 		setupLog.Error(err, "unable to create platform")
 		os.Exit(1)

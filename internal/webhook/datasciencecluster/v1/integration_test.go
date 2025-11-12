@@ -9,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
@@ -117,13 +119,30 @@ func TestDataScienceClusterV1_Integration(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("Starting test case: %s", tc.name)
+			//nolint:dupl // Test setup duplication is acceptable
 			ctx, env, teardown := envtestutil.SetupEnvAndClient(
 				t,
 				[]envt.RegisterWebhooksFn{
-					v1webhook.RegisterWebhooks,
-					dsciv1webhook.RegisterWebhooks,
-					v2webhook.RegisterWebhooks,
-					dsciv2webhook.RegisterWebhooks,
+					func(mgr manager.Manager) error {
+						return v1webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return dsciv1webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return v2webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return dsciv2webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
 				},
 				[]envt.RegisterControllersFn{},
 				envtestutil.DefaultWebhookTimeout,
@@ -341,13 +360,30 @@ func TestDataScienceClusterV1V2_ConversionWebhook(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			t.Logf("Starting conversion test case: %s", tc.name)
+			//nolint:dupl // Test setup duplication is acceptable
 			ctx, env, teardown := envtestutil.SetupEnvAndClient(
 				t,
 				[]envt.RegisterWebhooksFn{
-					v1webhook.RegisterWebhooks,
-					dsciv1webhook.RegisterWebhooks,
-					v2webhook.RegisterWebhooks,
-					dsciv2webhook.RegisterWebhooks,
+					func(mgr manager.Manager) error {
+						return v1webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return dsciv1webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return v2webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return dsciv2webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
 				},
 				[]envt.RegisterControllersFn{},
 				envtestutil.DefaultWebhookTimeout,

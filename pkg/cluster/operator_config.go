@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
+	"k8s.io/client-go/rest"
 )
 
 // OperatorConfig defines the operator manager configuration loaded from environment
@@ -22,6 +23,10 @@ type OperatorConfig struct {
 	ZapLogLevel     string `mapstructure:"zap-log-level"`
 	ZapStacktrace   string `mapstructure:"zap-stacktrace-level"`
 	ZapTimeEncoding string `mapstructure:"zap-time-encoding"`
+
+	// Kubernetes connection configuration
+	// Not loaded from viper - set programmatically after LoadConfig()
+	RestConfig *rest.Config `mapstructure:"-"`
 }
 
 // LoadConfig loads operator configuration from Viper.

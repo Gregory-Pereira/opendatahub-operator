@@ -1,6 +1,7 @@
 package kueue_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	operatorv1 "github.com/openshift/api/operator/v1"
 	"github.com/rs/xid"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv1webhook "github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook/datasciencecluster/v1"
@@ -87,8 +90,16 @@ func TestKueueWebhook_Integration(t *testing.T) {
 				t,
 				[]envt.RegisterWebhooksFn{
 					envtestutil.RegisterWebhooks,
-					dscv2webhook.RegisterWebhooks,
-					dscv1webhook.RegisterWebhooks,
+					func(mgr manager.Manager) error {
+						return dscv1webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
+					func(mgr manager.Manager) error {
+						return dscv2webhook.RegisterWebhooks(mgr, admission.HandlerFunc(func(context.Context, admission.Request) admission.Response {
+							return admission.Allowed("")
+						}))
+					},
 				},
 				[]envt.RegisterControllersFn{},
 				20*time.Second,

@@ -40,4 +40,10 @@ const (
 
 	// KueueLegacyManagedLabelKey is the legacy label key used to indicate a namespace is managed by Kueue.
 	KueueLegacyManagedLabelKey = "kueue-managed"
+
+	// OpenshiftOperatorsNamespace is the namespace for OpenShift operator dependencies.
+	OpenshiftOperatorsNamespace = "openshift-operators"
+
+	// OpenshiftIngressNamespace is the namespace for OpenShift ingress resources.
+	OpenshiftIngressNamespace = "openshift-ingress"
 )

@@ -52,28 +52,34 @@ var _ platform.Platform = (*Managed)(nil)
 
 // Managed implements platform-specific behavior for managed OpenDataHub deployments.
 type Managed struct {
-	client client.Client
-	config *cluster.OperatorConfig
-	scheme *runtime.Scheme
+	setupClient client.Client
+	config      *cluster.OperatorConfig
+	scheme      *runtime.Scheme
 }
 
 // New creates a new Managed platform instance.
-func New(cli client.Client, oconfig *cluster.OperatorConfig, scheme *runtime.Scheme) (platform.Platform, error) {
+func New(scheme *runtime.Scheme, oconfig *cluster.OperatorConfig) (platform.Platform, error) {
+	// Create uncached setup client
+	setupClient, err := client.New(oconfig.RestConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create setup client: %w", err)
+	}
+
 	return &Managed{
-		client: cli,
-		config: oconfig,
-		scheme: scheme,
+		setupClient: setupClient,
+		config:      oconfig,
+		scheme:      scheme,
 	}, nil
 }
 
 // Upgrade performs platform-specific upgrade operations for managed deployments.
 func (p *Managed) Upgrade(ctx context.Context) error {
-	rel, _ := upgrade.GetDeployedRelease(ctx, p.client)
+	rel, _ := upgrade.GetDeployedRelease(ctx, p.setupClient)
 	if rel.Version.Major == 0 && rel.Version.Minor == 0 && rel.Version.Patch == 0 {
 		return nil
 	}
 
-	if err := upgrade.CleanupExistingResource(ctx, p.client, Type, rel); err != nil {
+	if err := upgrade.CleanupExistingResource(ctx, p.setupClient, Type, rel); err != nil {
 		return fmt.Errorf("failed to cleanup existing resources: %w", err)
 	}
 	return nil
@@ -111,7 +117,7 @@ func (p *Managed) Run(ctx context.Context) error {
 	}
 
 	// Create manager
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(p.config.RestConfig, ctrl.Options{
 		Scheme:  p.scheme,
 		Metrics: ctrlmetrics.Options{BindAddress: p.config.MetricsAddr},
 		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
@@ -186,19 +192,19 @@ func (p *Managed) setupResources(ctx context.Context) error {
 	l := log.FromContext(ctx)
 
 	l.Info("Creating default DSCInitialization")
-	if err := upgrade.CreateDefaultDSCI(ctx, p.client, Type, p.config.MonitoringNamespace); err != nil {
+	if err := upgrade.CreateDefaultDSCI(ctx, p.setupClient, Type, p.config.MonitoringNamespace); err != nil {
 		l.Error(err, "unable to create default DSCInitialization")
 		return err // Blocking: return error
 	}
 
 	l.Info("Creating default DataScienceCluster")
-	if err := upgrade.CreateDefaultDSC(ctx, p.client); err != nil {
+	if err := upgrade.CreateDefaultDSC(ctx, p.setupClient); err != nil {
 		l.Error(err, "unable to create default DataScienceCluster")
 		return err // Blocking: return error
 	}
 
 	l.Info("Creating default GatewayConfig")
-	if err := cluster.CreateGatewayConfig(ctx, p.client); err != nil {
+	if err := cluster.CreateGatewayConfig(ctx, p.setupClient); err != nil {
 		l.Error(err, "unable to create default GatewayConfig")
 		return err // Blocking: return error
 	}

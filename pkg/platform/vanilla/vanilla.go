@@ -31,28 +31,34 @@ var _ platform.Platform = (*Vanilla)(nil)
 
 // Vanilla implements platform-specific behavior for vanilla Kubernetes deployments.
 type Vanilla struct {
-	client client.Client
-	config *cluster.OperatorConfig
-	scheme *runtime.Scheme
+	setupClient client.Client
+	config      *cluster.OperatorConfig
+	scheme      *runtime.Scheme
 }
 
 // New creates a new Vanilla platform instance.
-func New(cli client.Client, oconfig *cluster.OperatorConfig, scheme *runtime.Scheme) (platform.Platform, error) {
+func New(scheme *runtime.Scheme, oconfig *cluster.OperatorConfig) (platform.Platform, error) {
+	// Create uncached setup client
+	setupClient, err := client.New(oconfig.RestConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create setup client: %w", err)
+	}
+
 	return &Vanilla{
-		client: cli,
-		config: oconfig,
-		scheme: scheme,
+		setupClient: setupClient,
+		config:      oconfig,
+		scheme:      scheme,
 	}, nil
 }
 
 // Upgrade performs platform-specific upgrade operations for vanilla Kubernetes deployments.
 func (v *Vanilla) Upgrade(ctx context.Context) error {
-	rel, _ := upgrade.GetDeployedRelease(ctx, v.client)
+	rel, _ := upgrade.GetDeployedRelease(ctx, v.setupClient)
 	if rel.Version.Major == 0 && rel.Version.Minor == 0 && rel.Version.Patch == 0 {
 		return nil
 	}
 
-	if err := upgrade.CleanupExistingResource(ctx, v.client, Type, rel); err != nil {
+	if err := upgrade.CleanupExistingResource(ctx, v.setupClient, Type, rel); err != nil {
 		return fmt.Errorf("failed to cleanup existing resources: %w", err)
 	}
 	return nil
@@ -90,7 +96,7 @@ func (v *Vanilla) Run(ctx context.Context) error {
 	}
 
 	// Create manager
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(v.config.RestConfig, ctrl.Options{
 		Scheme:  v.scheme,
 		Metrics: ctrlmetrics.Options{BindAddress: v.config.MetricsAddr},
 		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{

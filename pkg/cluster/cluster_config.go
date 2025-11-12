@@ -233,6 +233,8 @@ func detectManagedRhoai(ctx context.Context, cli client.Client) (common.Platform
 
 func getPlatform(ctx context.Context, cli client.Client) (common.Platform, error) {
 	switch os.Getenv("ODH_PLATFORM_TYPE") {
+	case "Vanilla":
+		return Vanilla, nil
 	case "OpenDataHub":
 		return OpenDataHub, nil
 	case "ManagedRHOAI":
