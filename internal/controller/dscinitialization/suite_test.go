@@ -159,12 +159,7 @@ var _ = BeforeSuite(func() {
 
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&dscictrl.DSCInitializationReconciler{
-		Client:   k8sClient,
-		Scheme:   testScheme,
-		Recorder: mgr.GetEventRecorderFor("dscinitialization-controller"),
-	}).SetupWithManager(gCtx, mgr)
-
+	err = dscictrl.NewDSCInitializationReconciler(gCtx, mgr, "OpenShift")
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

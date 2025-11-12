@@ -194,15 +194,15 @@ func (p *OpenDataHub) Run(ctx context.Context) error {
 	}
 
 	// Setup reconcilers
-	if err := platform.SetupCoreReconcilers(ctx, mgr, p.componentRegistry); err != nil {
+	if err := platform.SetupCoreReconcilers(ctx, mgr, p); err != nil {
 		return err
 	}
 
-	if err := platform.SetupServiceReconcilers(ctx, mgr, p.serviceRegistry, p.componentRegistry); err != nil {
+	if err := platform.SetupServiceReconcilers(ctx, mgr, p); err != nil {
 		return err
 	}
 
-	if err := platform.SetupComponentReconcilers(ctx, mgr, p.componentRegistry); err != nil {
+	if err := platform.SetupComponentReconcilers(ctx, mgr, p); err != nil {
 		return err
 	}
 
@@ -258,4 +258,14 @@ func (p *OpenDataHub) Validator() platform.Validator {
 // Meta returns a copy of the platform's cluster metadata.
 func (p *OpenDataHub) Meta() platform.Meta {
 	return p.meta
+}
+
+// ComponentRegistry returns the platform's component registry.
+func (p *OpenDataHub) ComponentRegistry() *cr.Registry {
+	return p.componentRegistry
+}
+
+// ServiceRegistry returns the platform's service registry.
+func (p *OpenDataHub) ServiceRegistry() *sr.Registry {
+	return p.serviceRegistry
 }

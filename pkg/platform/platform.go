@@ -6,6 +6,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
+	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
+	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
 )
 
 const (
@@ -47,6 +49,14 @@ type Platform interface {
 	// Meta returns a copy of the platform's cluster metadata.
 	// Metadata is populated during Init() and contains cluster characteristics.
 	Meta() Meta
+
+	// ComponentRegistry returns the platform's component registry.
+	// The registry contains all registered component handlers for this platform.
+	ComponentRegistry() *cr.Registry
+
+	// ServiceRegistry returns the platform's service registry.
+	// The registry contains all registered service handlers for this platform.
+	ServiceRegistry() *sr.Registry
 }
 
 // Validator provides platform-specific admission webhook handlers.

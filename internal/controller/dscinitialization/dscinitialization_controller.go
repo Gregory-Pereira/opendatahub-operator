@@ -73,15 +73,105 @@ type DSCInitializationReconciler struct {
 }
 
 // NewDSCInitializationReconciler creates a new DSCInitialization reconciler and sets it up with the manager.
-func NewDSCInitializationReconciler(ctx context.Context, mgr ctrl.Manager) error {
-	if err := (&DSCInitializationReconciler{
+// The distribution parameter (e.g., "OpenShift", "Vanilla") determines which platform-specific resources to watch.
+func NewDSCInitializationReconciler(ctx context.Context, mgr ctrl.Manager, distribution string) error {
+	r := &DSCInitializationReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("dscinitialization-controller"),
-	}).SetupWithManager(ctx, mgr); err != nil {
-		return err
 	}
-	return nil
+
+	bldr := ctrl.NewControllerManagedBy(mgr).
+		// add predicates prevents meaningless reconciliations from being triggered
+		// not use WithEventFilter() because it conflict with secret and configmap predicate
+		For(
+			&dsciv2.DSCInitialization{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})),
+		).
+		Owns(
+			&corev1.Namespace{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&corev1.Secret{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&corev1.ConfigMap{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&networkingv1.NetworkPolicy{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&rbacv1.Role{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&rbacv1.RoleBinding{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&rbacv1.ClusterRole{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&rbacv1.ClusterRoleBinding{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&appsv1.Deployment{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&corev1.ServiceAccount{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns(
+			&corev1.Service{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})))
+
+	// Only watch Routes on OpenShift platforms
+	if distribution == "OpenShift" {
+		bldr = bldr.Owns(
+			&routev1.Route{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})))
+	}
+
+	bldr = bldr.
+		Owns(&corev1.PersistentVolumeClaim{},
+			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
+		Owns( // ensure always have default one for AcceleratorProfile/HardwareProfile blocking
+			&admissionregistrationv1.ValidatingAdmissionPolicy{},
+		).
+		Owns( // ensure always have default one for AcceleratorProfile/HardwareProfile blocking
+			&admissionregistrationv1.ValidatingAdmissionPolicyBinding{},
+		).
+		Owns( // ensure always have one platform's HardwareProfile in the cluster.
+			&infrav1.HardwareProfile{},
+			builder.WithPredicates(rp.Deleted())).
+		Watches(
+			&dscv2.DataScienceCluster{},
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
+				return r.watchDSCResource(ctx)
+			}),
+			builder.WithPredicates(rp.DSCDeletionPredicate), // TODO: is it needed?
+		).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.watchMonitoringSecretResource),
+			builder.WithPredicates(rp.SecretContentChangedPredicate),
+		).
+		Watches(
+			&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(r.watchMonitoringConfigMapResource),
+			builder.WithPredicates(rp.CMContentChangedPredicate),
+		).
+		Watches(
+			&serviceApi.Auth{},
+			handler.EnqueueRequestsFromMapFunc(r.watchAuthResource),
+		).
+		Watches( // TODO: this might not be needed after v3.3.
+			&apiextensionsv1.CustomResourceDefinition{},
+			handler.EnqueueRequestsFromMapFunc(r.watchHWProfileCRDResource),
+			builder.WithPredicates(predicate.Or(
+				rp.CreatedOrUpdatedName("acceleratorprofiles.dashboard.opendatahub.io"),
+				rp.CreatedOrUpdatedName("hardwareprofiles.dashboard.opendatahub.io"),
+			)),
+		)
+
+	return bldr.Complete(r)
 }
 
 // Reconcile contains controller logic specific to DSCInitialization instance updates.
@@ -326,94 +416,6 @@ func (r *DSCInitializationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 		return ctrl.Result{}, nil
 	}
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *DSCInitializationReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		// add predicates prevents meaningless reconciliations from being triggered
-		// not use WithEventFilter() because it conflict with secret and configmap predicate
-		For(
-			&dsciv2.DSCInitialization{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{})),
-		).
-		Owns(
-			&corev1.Namespace{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&corev1.Secret{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&corev1.ConfigMap{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&networkingv1.NetworkPolicy{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&rbacv1.Role{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&rbacv1.RoleBinding{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&rbacv1.ClusterRole{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&rbacv1.ClusterRoleBinding{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&appsv1.Deployment{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&corev1.ServiceAccount{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&corev1.Service{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(
-			&routev1.Route{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns(&corev1.PersistentVolumeClaim{},
-			builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, predicate.LabelChangedPredicate{}))).
-		Owns( // ensure always have default one for AcceleratorProfile/HardwareProfile blocking
-			&admissionregistrationv1.ValidatingAdmissionPolicy{},
-		).
-		Owns( // ensure always have default one for AcceleratorProfile/HardwareProfile blocking
-			&admissionregistrationv1.ValidatingAdmissionPolicyBinding{},
-		).
-		Owns( // ensure always have one platform's HardwareProfile in the cluster.
-			&infrav1.HardwareProfile{},
-			builder.WithPredicates(rp.Deleted())).
-		Watches(
-			&dscv2.DataScienceCluster{},
-			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, a client.Object) []reconcile.Request {
-				return r.watchDSCResource(ctx)
-			}),
-			builder.WithPredicates(rp.DSCDeletionPredicate), // TODO: is it needed?
-		).
-		Watches(
-			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(r.watchMonitoringSecretResource),
-			builder.WithPredicates(rp.SecretContentChangedPredicate),
-		).
-		Watches(
-			&corev1.ConfigMap{},
-			handler.EnqueueRequestsFromMapFunc(r.watchMonitoringConfigMapResource),
-			builder.WithPredicates(rp.CMContentChangedPredicate),
-		).
-		Watches(
-			&serviceApi.Auth{},
-			handler.EnqueueRequestsFromMapFunc(r.watchAuthResource),
-		).
-		Watches( // TODO: this might not be needed after v3.3.
-			&apiextensionsv1.CustomResourceDefinition{},
-			handler.EnqueueRequestsFromMapFunc(r.watchHWProfileCRDResource),
-			builder.WithPredicates(predicate.Or(
-				rp.CreatedOrUpdatedName("acceleratorprofiles.dashboard.opendatahub.io"),
-				rp.CreatedOrUpdatedName("hardwareprofiles.dashboard.opendatahub.io"),
-			)),
-		).
-		Complete(r)
 }
 
 func (r *DSCInitializationReconciler) watchMonitoringConfigMapResource(ctx context.Context, a client.Object) []reconcile.Request {

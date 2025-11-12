@@ -144,15 +144,15 @@ func (v *Vanilla) Run(ctx context.Context) error {
 	}
 
 	// Setup reconcilers
-	if err := platform.SetupCoreReconcilers(ctx, mgr, v.componentRegistry); err != nil {
+	if err := platform.SetupCoreReconcilers(ctx, mgr, v); err != nil {
 		return err
 	}
 
-	if err := platform.SetupServiceReconcilers(ctx, mgr, v.serviceRegistry, v.componentRegistry); err != nil {
+	if err := platform.SetupServiceReconcilers(ctx, mgr, v); err != nil {
 		return err
 	}
 
-	if err := platform.SetupComponentReconcilers(ctx, mgr, v.componentRegistry); err != nil {
+	if err := platform.SetupComponentReconcilers(ctx, mgr, v); err != nil {
 		return err
 	}
 
@@ -192,4 +192,14 @@ func (v *Vanilla) Validator() platform.Validator {
 // Meta returns a copy of the platform's cluster metadata.
 func (v *Vanilla) Meta() platform.Meta {
 	return v.meta
+}
+
+// ComponentRegistry returns the platform's component registry.
+func (v *Vanilla) ComponentRegistry() *cr.Registry {
+	return v.componentRegistry
+}
+
+// ServiceRegistry returns the platform's service registry.
+func (v *Vanilla) ServiceRegistry() *sr.Registry {
+	return v.serviceRegistry
 }
