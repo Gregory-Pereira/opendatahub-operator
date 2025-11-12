@@ -65,24 +65,6 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/logger"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/factory"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/utils/flags"
-
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/dashboard"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/datasciencepipelines"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/feastoperator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kserve"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kueue"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/llamastackoperator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/modelcontroller"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/modelregistry"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/ray"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/trainingoperator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/trustyai"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/workbenches"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/auth"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/certconfigmapgenerator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/gateway"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/monitoring"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/setup"
 )
 
 var (
@@ -175,35 +157,42 @@ func main() { //nolint:funlen
 	}
 	oconfig.RestConfig = setupCfg
 
-	// Create new uncached client to run initial setup
+	// Create temporary uncached client to determine platform type
 	setupClient, err := client.New(setupCfg, client.Options{Scheme: scheme})
 	if err != nil {
-		setupLog.Error(err, "error getting client for setup")
+		setupLog.Error(err, "error getting client for platform detection")
 		os.Exit(1)
 	}
 
-	err = cluster.Init(ctx, setupClient)
+	// Determine platform type
+	platformType, err := cluster.GetPlatformType(ctx, setupClient)
 	if err != nil {
-		setupLog.Error(err, "unable to initialize cluster config")
+		setupLog.Error(err, "unable to determine platform type")
 		os.Exit(1)
 	}
 
-	// Get operator platform
-	release := cluster.GetRelease()
-
-	// Create platform instance
-	plat, err := factory.New(release.Name, scheme, oconfig)
+	// Create platform instance (platform creates its own setupClient)
+	plat, err := factory.New(platformType, scheme, oconfig)
 	if err != nil {
 		setupLog.Error(err, "unable to create platform")
 		os.Exit(1)
 	}
-	setupLog.Info("Platform initialized", "type", plat.String())
+	setupLog.Info("Platform created", "type", platformType)
 
 	// Initialize platform (handles services and components initialization)
 	if err := plat.Init(ctx); err != nil {
 		setupLog.Error(err, "unable to initialize platform")
 		os.Exit(1)
 	}
+
+	// Log discovered cluster metadata
+	meta := plat.Meta()
+	setupLog.Info("Cluster metadata discovered",
+		"platform", meta.Type,
+		"operatorVersion", meta.Version,
+		"distributionVersion", meta.DistributionVersion,
+		"distribution", meta.Distribution,
+		"fipsEnabled", meta.FIPSEnabled)
 
 	// Perform platform-specific upgrade operations
 	if err := plat.Upgrade(ctx); err != nil {
@@ -212,7 +201,7 @@ func main() { //nolint:funlen
 	}
 
 	// Run platform (creates manager, registers webhooks, starts reconcilers)
-	setupLog.Info("Starting platform runtime", "platform", plat.String())
+	setupLog.Info("Starting platform runtime", "platform", platformType)
 	if err := plat.Run(ctx); err != nil {
 		setupLog.Error(err, "problem running platform")
 		os.Exit(1)

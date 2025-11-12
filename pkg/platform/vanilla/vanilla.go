@@ -13,16 +13,15 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kserve"
 	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/certconfigmapgenerator"
 	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform"
+	vanillaSupport "github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/support/vanilla"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/upgrade"
-
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kserve"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/certconfigmapgenerator"
 )
 
 const Type = cluster.Vanilla
@@ -31,9 +30,12 @@ var _ platform.Platform = (*Vanilla)(nil)
 
 // Vanilla implements platform-specific behavior for vanilla Kubernetes deployments.
 type Vanilla struct {
-	setupClient client.Client
-	config      *cluster.OperatorConfig
-	scheme      *runtime.Scheme
+	setupClient       client.Client
+	config            *cluster.OperatorConfig
+	scheme            *runtime.Scheme
+	componentRegistry *cr.Registry
+	serviceRegistry   *sr.Registry
+	meta              platform.Meta
 }
 
 // New creates a new Vanilla platform instance.
@@ -48,6 +50,12 @@ func New(scheme *runtime.Scheme, oconfig *cluster.OperatorConfig) (platform.Plat
 		setupClient: setupClient,
 		config:      oconfig,
 		scheme:      scheme,
+		componentRegistry: cr.NewRegistry(
+			&kserve.ComponentHandler{},
+		),
+		serviceRegistry: sr.NewRegistry(
+			&certconfigmapgenerator.ServiceHandler{},
+		),
 	}, nil
 }
 
@@ -66,15 +74,25 @@ func (v *Vanilla) Upgrade(ctx context.Context) error {
 
 // Init performs platform-specific initialization for vanilla Kubernetes deployments.
 func (v *Vanilla) Init(ctx context.Context) error {
+	// Discover cluster metadata
+	meta, err := vanillaSupport.DiscoverMeta(ctx, v.setupClient, v.config.RestConfig, Type)
+	if err != nil {
+		return fmt.Errorf("failed to discover cluster metadata: %w", err)
+	}
+	v.meta = meta
+
+	// Update global cluster config for backwards compatibility
+	cluster.SetMeta(Type, meta.Version, meta.DistributionVersion, meta.Distribution, meta.FIPSEnabled)
+
 	// Initialize services
-	if err := sr.ForEach(func(sh sr.ServiceHandler) error {
+	if err := v.serviceRegistry.ForEach(func(sh sr.ServiceHandler) error {
 		return sh.Init(Type)
 	}); err != nil {
 		return fmt.Errorf("unable to init services: %w", err)
 	}
 
 	// Initialize components
-	if err := cr.ForEach(func(ch cr.ComponentHandler) error {
+	if err := v.componentRegistry.ForEach(func(ch cr.ComponentHandler) error {
 		return ch.Init(Type)
 	}); err != nil {
 		return fmt.Errorf("unable to init components: %w", err)
@@ -126,15 +144,15 @@ func (v *Vanilla) Run(ctx context.Context) error {
 	}
 
 	// Setup reconcilers
-	if err := platform.SetupCoreReconcilers(ctx, mgr); err != nil {
+	if err := platform.SetupCoreReconcilers(ctx, mgr, v.componentRegistry); err != nil {
 		return err
 	}
 
-	if err := platform.SetupServiceReconcilers(ctx, mgr); err != nil {
+	if err := platform.SetupServiceReconcilers(ctx, mgr, v.serviceRegistry, v.componentRegistry); err != nil {
 		return err
 	}
 
-	if err := platform.SetupComponentReconcilers(ctx, mgr); err != nil {
+	if err := platform.SetupComponentReconcilers(ctx, mgr, v.componentRegistry); err != nil {
 		return err
 	}
 
@@ -152,7 +170,7 @@ func (v *Vanilla) Run(ctx context.Context) error {
 	}
 
 	// Start manager (blocking)
-	log.Info("starting manager", "platform", v.String())
+	log.Info("starting manager", "platform", Type)
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("problem running manager: %w", err)
 	}
@@ -171,12 +189,7 @@ func (v *Vanilla) Validator() platform.Validator {
 	return &validator{}
 }
 
-// Type returns the platform type identifier for vanilla Kubernetes deployments.
-func (v *Vanilla) Type() common.Platform {
-	return Type
-}
-
-// String returns the canonical platform display name for vanilla Kubernetes deployments.
-func (v *Vanilla) String() string {
-	return string(Type)
+// Meta returns a copy of the platform's cluster metadata.
+func (v *Vanilla) Meta() platform.Meta {
+	return v.meta
 }

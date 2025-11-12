@@ -18,33 +18,32 @@ import (
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/dashboard"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/datasciencepipelines"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/feastoperator"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kserve"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kueue"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/llamastackoperator"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/modelcontroller"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/modelregistry"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/ray"
 	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/trainingoperator"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/trustyai"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/workbenches"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/auth"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/certconfigmapgenerator"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/gateway"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/monitoring"
 	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
+	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/setup"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/support/openshift"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/resources"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/upgrade"
-
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/dashboard"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/datasciencepipelines"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/feastoperator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kserve"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/kueue"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/llamastackoperator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/modelcontroller"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/modelregistry"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/ray"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/trainingoperator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/trustyai"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/workbenches"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/auth"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/certconfigmapgenerator"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/gateway"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/monitoring"
-	_ "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/setup"
 )
 
 const Type = cluster.OpenDataHub
@@ -53,9 +52,12 @@ var _ platform.Platform = (*OpenDataHub)(nil)
 
 // OpenDataHub implements platform-specific behavior for OpenDataHub deployments.
 type OpenDataHub struct {
-	setupClient client.Client
-	config      *cluster.OperatorConfig
-	scheme      *runtime.Scheme
+	setupClient       client.Client
+	config            *cluster.OperatorConfig
+	scheme            *runtime.Scheme
+	componentRegistry *cr.Registry
+	serviceRegistry   *sr.Registry
+	meta              platform.Meta
 }
 
 // New creates a new OpenDataHub platform instance.
@@ -70,6 +72,27 @@ func New(scheme *runtime.Scheme, oconfig *cluster.OperatorConfig) (platform.Plat
 		setupClient: setupClient,
 		config:      oconfig,
 		scheme:      scheme,
+		componentRegistry: cr.NewRegistry(
+			&dashboard.ComponentHandler{},
+			&datasciencepipelines.ComponentHandler{},
+			&feastoperator.ComponentHandler{},
+			&kserve.ComponentHandler{},
+			&kueue.ComponentHandler{},
+			&llamastackoperator.ComponentHandler{},
+			&modelcontroller.ComponentHandler{},
+			&modelregistry.ComponentHandler{},
+			&ray.ComponentHandler{},
+			&trainingoperator.ComponentHandler{},
+			&trustyai.ComponentHandler{},
+			&workbenches.ComponentHandler{},
+		),
+		serviceRegistry: sr.NewRegistry(
+			&auth.ServiceHandler{},
+			&certconfigmapgenerator.ServiceHandler{},
+			&gateway.ServiceHandler{},
+			&monitoring.ServiceHandler{},
+			&setup.ServiceHandler{},
+		),
 	}, nil
 }
 
@@ -88,15 +111,33 @@ func (p *OpenDataHub) Upgrade(ctx context.Context) error {
 
 // Init performs platform-specific initialization for OpenDataHub deployments.
 func (p *OpenDataHub) Init(ctx context.Context) error {
+	// Discover cluster metadata
+	meta, err := openshift.DiscoverMeta(ctx, p.setupClient, Type)
+	if err != nil {
+		return fmt.Errorf("failed to discover cluster metadata: %w", err)
+	}
+	p.meta = meta
+
+	// Update global cluster config for backwards compatibility
+	cluster.SetMeta(Type, meta.Version, meta.DistributionVersion, meta.Distribution, meta.FIPSEnabled)
+
+	// Set application namespace
+	if err := cluster.SetApplicationNamespace(ctx, p.setupClient, Type); err != nil {
+		return fmt.Errorf("failed to set application namespace: %w", err)
+	}
+
+	// Set monitoring namespace
+	cluster.SetManagedMonitoringNamespace(Type)
+
 	// Initialize services
-	if err := sr.ForEach(func(sh sr.ServiceHandler) error {
+	if err := p.serviceRegistry.ForEach(func(sh sr.ServiceHandler) error {
 		return sh.Init(Type)
 	}); err != nil {
 		return fmt.Errorf("unable to init services: %w", err)
 	}
 
 	// Initialize components
-	if err := cr.ForEach(func(ch cr.ComponentHandler) error {
+	if err := p.componentRegistry.ForEach(func(ch cr.ComponentHandler) error {
 		return ch.Init(Type)
 	}); err != nil {
 		return fmt.Errorf("unable to init components: %w", err)
@@ -153,15 +194,15 @@ func (p *OpenDataHub) Run(ctx context.Context) error {
 	}
 
 	// Setup reconcilers
-	if err := platform.SetupCoreReconcilers(ctx, mgr); err != nil {
+	if err := platform.SetupCoreReconcilers(ctx, mgr, p.componentRegistry); err != nil {
 		return err
 	}
 
-	if err := platform.SetupServiceReconcilers(ctx, mgr); err != nil {
+	if err := platform.SetupServiceReconcilers(ctx, mgr, p.serviceRegistry, p.componentRegistry); err != nil {
 		return err
 	}
 
-	if err := platform.SetupComponentReconcilers(ctx, mgr); err != nil {
+	if err := platform.SetupComponentReconcilers(ctx, mgr, p.componentRegistry); err != nil {
 		return err
 	}
 
@@ -179,7 +220,7 @@ func (p *OpenDataHub) Run(ctx context.Context) error {
 	}
 
 	// Start manager (blocking)
-	logger.Info("starting manager", "platform", p.String())
+	logger.Info("starting manager", "platform", Type)
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("problem running manager: %w", err)
 	}
@@ -214,12 +255,7 @@ func (p *OpenDataHub) Validator() platform.Validator {
 	return &validator{}
 }
 
-// Type returns the platform type identifier for OpenDataHub deployments.
-func (p *OpenDataHub) Type() common.Platform {
-	return Type
-}
-
-// String returns the canonical platform display name for OpenDataHub deployments.
-func (p *OpenDataHub) String() string {
-	return string(Type)
+// Meta returns a copy of the platform's cluster metadata.
+func (p *OpenDataHub) Meta() platform.Meta {
+	return p.meta
 }

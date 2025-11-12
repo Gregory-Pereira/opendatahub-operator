@@ -13,6 +13,15 @@ const (
 	LeaderElectionID = "07ed84f7.opendatahub.io"
 )
 
+// Meta contains cluster metadata discovered during platform initialization.
+type Meta struct {
+	Type                common.Platform // Platform type (Vanilla, OpenDataHub, ManagedRHOAI, SelfManagedRHOAI)
+	Version             string          // Operator version (from CSV)
+	DistributionVersion string          // K8s distribution version (e.g., "1.28.0", "4.15.0")
+	Distribution        string          // K8s distribution (OpenShift, Vanilla, GKE, EKS, AKS)
+	FIPSEnabled         bool            // FIPS status
+}
+
 // Platform defines platform-specific behavior for the operator.
 // Different platform variants (SelfManaged, OpenDataHub, Managed, Vanilla) can implement
 // custom logic for upgrades, initialization, runtime behavior, and validation.
@@ -35,12 +44,9 @@ type Platform interface {
 	// The validator provides admission handlers for DSCInitialization and DataScienceCluster.
 	Validator() Validator
 
-	// Type returns the platform type identifier.
-	Type() common.Platform
-
-	// String returns the canonical platform display name.
-	// This enables the Platform to implement fmt.Stringer.
-	String() string
+	// Meta returns a copy of the platform's cluster metadata.
+	// Metadata is populated during Init() and contains cluster characteristics.
+	Meta() Meta
 }
 
 // Validator provides platform-specific admission webhook handlers.
