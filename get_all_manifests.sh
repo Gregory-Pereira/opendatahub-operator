@@ -189,3 +189,11 @@ for key in "${!PLATFORM_MANIFESTS[@]}"; do
         ln -s $(pwd)/${source_path} ${DST_MANIFESTS_DIR}/${target_path}
     fi
 done
+
+# Fetch and template llm-d Helm charts
+echo -e "\033[32mFetching llm-d Helm charts...\033[0m"
+if [[ -x "./hack/fetch-helm-charts.sh" ]]; then
+    ./hack/fetch-helm-charts.sh
+else
+    echo -e "\033[33mWarning: hack/fetch-helm-charts.sh not found or not executable. Skipping llm-d Helm chart fetch.\033[0m"
+fi

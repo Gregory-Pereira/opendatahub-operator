@@ -1,0 +1,28 @@
+apiVersion: components.platform.opendatahub.io/v1alpha1
+kind: Llmd
+metadata:
+  name: default-llm-d
+spec:
+  # ModelService configuration
+  modelService:
+    enabled: true
+    version: "0.2.11"
+    # Optional: Override default Helm values
+    # values:
+    #   key: value
+
+  # Infra configuration
+  infra:
+    enabled: true
+    version: "1.3.3"
+    # Optional: Override default Helm values
+    # values:
+    #   key: value
+
+  # Gateway API Inference Extension configuration
+  gatewayAPI:
+    enabled: true
+    version: "1.0.1"
+    # Optional: Override default Helm values
+    # values:
+    #   key: value

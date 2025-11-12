@@ -63,6 +63,9 @@ type Components struct {
 
 	// LlamaStack Operator component configuration.
 	LlamaStackOperator componentApi.DSCLlamaStackOperator `json:"llamastackoperator,omitempty"`
+
+	// Llmd component configuration.
+	Llmd componentApi.DSCLlmd `json:"llmd,omitempty"`
 }
 
 // ComponentsStatus defines the custom status of DataScienceCluster components.
@@ -99,6 +102,9 @@ type ComponentsStatus struct {
 
 	// LlamaStack Operator component status.
 	LlamaStackOperator componentApi.DSCLlamaStackOperatorStatus `json:"llamastackoperator,omitempty"`
+
+	// Llmd component status.
+	Llmd componentApi.DSCLlmdStatus `json:"llmd,omitempty"`
 }
 
 // DataScienceClusterStatus defines the observed state of DataScienceCluster.

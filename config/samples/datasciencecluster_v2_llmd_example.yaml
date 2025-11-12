@@ -1,0 +1,24 @@
+apiVersion: datasciencecluster.opendatahub.io/v2
+kind: DataScienceCluster
+metadata:
+  name: default-dsc
+spec:
+  components:
+    # Enable llm-d component
+    llmd:
+      managementState: Managed
+      modelService:
+        enabled: true
+        version: "0.2.11"
+      infra:
+        enabled: true
+        version: "1.3.3"
+      gatewayAPI:
+        enabled: true
+        version: "1.0.1"
+
+    # Other components can be configured as needed
+    dashboard:
+      managementState: Managed
+    workbenches:
+      managementState: Managed
