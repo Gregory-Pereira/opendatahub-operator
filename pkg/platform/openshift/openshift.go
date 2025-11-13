@@ -1,18 +1,13 @@
-package managed
+package openshift
 
 import (
 	"context"
 	"fmt"
 
-	userv1 "github.com/openshift/api/user/v1"
-	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
-	authorizationv1 "k8s.io/api/authorization/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -38,106 +33,121 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/setup"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/support/openshift"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/resources"
+	openshiftsupport "github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/support/openshift"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/upgrade"
 )
 
-const Type = cluster.ManagedRhoai
+var _ platform.Platform = (*OpenShift)(nil)
 
-var _ platform.Platform = (*Managed)(nil)
-
-// Managed implements platform-specific behavior for managed OpenDataHub deployments.
-type Managed struct {
+// OpenShift implements platform-specific behavior for OpenShift-based deployments.
+// It consolidates common logic for Managed, SelfManaged, and OpenDataHub variants,
+// with variant-specific behavior delegated to Variant.PreRun hooks.
+type OpenShift struct {
 	setupClient       client.Client
-	config            *cluster.OperatorConfig
+	operatorConfig    *cluster.OperatorConfig
+	variant           Variant
 	scheme            *runtime.Scheme
 	componentRegistry *cr.Registry
 	serviceRegistry   *sr.Registry
 	meta              platform.Meta
 }
 
-// New creates a new Managed platform instance.
-func New(scheme *runtime.Scheme, oconfig *cluster.OperatorConfig) (platform.Platform, error) {
+// New creates a new OpenShift platform instance with the specified variant configuration.
+func New(
+	scheme *runtime.Scheme,
+	oconfig *cluster.OperatorConfig,
+	variant Variant,
+) (platform.Platform, error) {
 	// Create uncached setup client
 	setupClient, err := client.New(oconfig.RestConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create setup client: %w", err)
 	}
 
-	return &Managed{
-		setupClient: setupClient,
-		config:      oconfig,
-		scheme:      scheme,
-		componentRegistry: cr.NewRegistry(
-			&dashboard.ComponentHandler{},
-			&datasciencepipelines.ComponentHandler{},
-			&feastoperator.ComponentHandler{},
-			&kserve.ComponentHandler{},
-			&kueue.ComponentHandler{},
-			&llamastackoperator.ComponentHandler{},
-			&modelcontroller.ComponentHandler{},
-			&modelregistry.ComponentHandler{},
-			&ray.ComponentHandler{},
-			&trainingoperator.ComponentHandler{},
-			&trustyai.ComponentHandler{},
-			&workbenches.ComponentHandler{},
-		),
-		serviceRegistry: sr.NewRegistry(
-			&auth.ServiceHandler{},
-			&certconfigmapgenerator.ServiceHandler{},
-			&gateway.ServiceHandler{},
-			&monitoring.ServiceHandler{},
-			&setup.ServiceHandler{},
-		),
+	// All OpenShift variants have identical component and service registries
+	componentRegistry := cr.NewRegistry(
+		&dashboard.ComponentHandler{},
+		&datasciencepipelines.ComponentHandler{},
+		&feastoperator.ComponentHandler{},
+		&kserve.ComponentHandler{},
+		&kueue.ComponentHandler{},
+		&llamastackoperator.ComponentHandler{},
+		&modelcontroller.ComponentHandler{},
+		&modelregistry.ComponentHandler{},
+		&ray.ComponentHandler{},
+		&trainingoperator.ComponentHandler{},
+		&trustyai.ComponentHandler{},
+		&workbenches.ComponentHandler{},
+	)
+
+	serviceRegistry := sr.NewRegistry(
+		&auth.ServiceHandler{},
+		&certconfigmapgenerator.ServiceHandler{},
+		&gateway.ServiceHandler{},
+		&monitoring.ServiceHandler{},
+		&setup.ServiceHandler{},
+	)
+
+	return &OpenShift{
+		setupClient:       setupClient,
+		operatorConfig:    oconfig,
+		variant:           variant,
+		scheme:            scheme,
+		componentRegistry: componentRegistry,
+		serviceRegistry:   serviceRegistry,
 	}, nil
 }
 
-// Upgrade performs platform-specific upgrade operations for managed deployments.
-func (p *Managed) Upgrade(ctx context.Context) error {
+// Upgrade performs platform-specific upgrade operations.
+func (p *OpenShift) Upgrade(ctx context.Context) error {
 	rel, _ := upgrade.GetDeployedRelease(ctx, p.setupClient)
 	if rel.Version.Major == 0 && rel.Version.Minor == 0 && rel.Version.Patch == 0 {
 		return nil
 	}
 
-	if err := upgrade.CleanupExistingResource(ctx, p.setupClient, Type, rel); err != nil {
+	if err := upgrade.CleanupExistingResource(ctx, p.setupClient, p.variant.Type, rel); err != nil {
 		return fmt.Errorf("failed to cleanup existing resources: %w", err)
 	}
 	return nil
 }
 
-// Init performs platform-specific initialization for managed deployments.
-func (p *Managed) Init(ctx context.Context) error {
+// Init performs platform-specific initialization.
+func (p *OpenShift) Init(ctx context.Context) error {
 	// Discover cluster metadata
-	meta, err := openshift.DiscoverMeta(ctx, p.setupClient, Type)
+	meta, err := openshiftsupport.DiscoverMeta(ctx, p.setupClient, p.variant.Type)
 	if err != nil {
 		return fmt.Errorf("failed to discover cluster metadata: %w", err)
 	}
 	p.meta = meta
 
 	// Update global cluster config for backwards compatibility
-	cluster.SetMeta(Type, meta.Version, meta.DistributionVersion, meta.Distribution, meta.FIPSEnabled)
+	cluster.SetMeta(
+		p.variant.Type,
+		meta.Version,
+		meta.DistributionVersion,
+		meta.Distribution,
+		meta.FIPSEnabled,
+	)
 
 	// Set application namespace
-	if err := cluster.SetApplicationNamespace(ctx, p.setupClient, Type); err != nil {
+	if err := cluster.SetApplicationNamespace(ctx, p.setupClient, p.variant.Type); err != nil {
 		return fmt.Errorf("failed to set application namespace: %w", err)
 	}
 
 	// Set monitoring namespace
-	cluster.SetManagedMonitoringNamespace(Type)
+	cluster.SetManagedMonitoringNamespace(p.variant.Type)
 
 	// Initialize services
 	if err := p.serviceRegistry.ForEach(func(sh sr.ServiceHandler) error {
-		return sh.Init(Type)
+		return sh.Init(p.variant.Type)
 	}); err != nil {
 		return fmt.Errorf("unable to init services: %w", err)
 	}
 
 	// Initialize components
 	if err := p.componentRegistry.ForEach(func(ch cr.ComponentHandler) error {
-		return ch.Init(Type)
+		return ch.Init(p.variant.Type)
 	}); err != nil {
 		return fmt.Errorf("unable to init components: %w", err)
 	}
@@ -145,43 +155,31 @@ func (p *Managed) Init(ctx context.Context) error {
 	return nil
 }
 
-// Run executes platform-specific runtime logic for managed deployments.
+// Run executes platform-specific runtime logic.
 // This creates the controller-runtime manager, registers webhooks and controllers,
 // and starts the manager (blocking until shutdown).
-func (p *Managed) Run(ctx context.Context) error {
+func (p *OpenShift) Run(ctx context.Context) error {
 	logger := ctrl.LoggerFrom(ctx)
 
 	// Create cache configuration
-	cacheOptions, err := CreateCacheOptions(p.scheme)
+	cacheOptions, err := CreateCacheOptions(p.scheme, p.variant)
 	if err != nil {
 		return fmt.Errorf("failed to create cache options: %w", err)
 	}
 
 	// Create manager
-	mgr, err := ctrl.NewManager(p.config.RestConfig, ctrl.Options{
+	mgr, err := ctrl.NewManager(p.operatorConfig.RestConfig, ctrl.Options{
 		Scheme:  p.scheme,
-		Metrics: ctrlmetrics.Options{BindAddress: p.config.MetricsAddr},
+		Metrics: ctrlmetrics.Options{BindAddress: p.operatorConfig.MetricsAddr},
 		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
 			Port: 9443,
 		}),
-		PprofBindAddress:       p.config.PprofAddr,
-		HealthProbeBindAddress: p.config.HealthProbeAddr,
+		PprofBindAddress:       p.operatorConfig.PprofAddr,
+		HealthProbeBindAddress: p.operatorConfig.HealthProbeAddr,
 		Cache:                  cacheOptions,
-		LeaderElection:         p.config.LeaderElection,
+		LeaderElection:         p.operatorConfig.LeaderElection,
 		LeaderElectionID:       platform.LeaderElectionID,
-		Client: client.Options{
-			Cache: &client.CacheOptions{
-				DisableFor: []client.Object{
-					resources.GvkToUnstructured(gvk.OpenshiftIngress),
-					&ofapiv1alpha1.Subscription{},
-					&authorizationv1.SelfSubjectRulesReview{},
-					&corev1.Pod{},
-					&userv1.Group{},
-					&ofapiv1alpha1.CatalogSource{},
-				},
-				Unstructured: true,
-			},
-		},
+		Client:                 CreateClientOptions(),
 	})
 	if err != nil {
 		return fmt.Errorf("unable to create manager: %w", err)
@@ -205,9 +203,13 @@ func (p *Managed) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Add platform-specific setup
-	if err := mgr.Add(manager.RunnableFunc(p.setupResources)); err != nil {
-		return fmt.Errorf("failed to add setup resources to manager: %w", err)
+	// Add platform-specific setup via variant PreRun hook
+	if p.variant.PreRun != nil {
+		if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+			return p.variant.PreRun(ctx, p)
+		})); err != nil {
+			return fmt.Errorf("failed to add variant setup to manager: %w", err)
+		}
 	}
 
 	// Add health checks
@@ -219,7 +221,10 @@ func (p *Managed) Run(ctx context.Context) error {
 	}
 
 	// Start manager (blocking)
-	logger.Info("starting manager", "platform", Type)
+	logger.Info("starting manager",
+		"platform", p.variant.Type,
+		"variant", p.variant.Name,
+	)
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("problem running manager: %w", err)
 	}
@@ -227,48 +232,22 @@ func (p *Managed) Run(ctx context.Context) error {
 	return nil
 }
 
-// setupResources creates default resources (DSCI and DSC) for managed deployments.
-// Errors block startup (blocking) - managed platform requires default resources.
-func (p *Managed) setupResources(ctx context.Context) error {
-	l := log.FromContext(ctx)
-
-	l.Info("Creating default DSCInitialization")
-	if err := upgrade.CreateDefaultDSCI(ctx, p.setupClient, Type, p.config.MonitoringNamespace); err != nil {
-		l.Error(err, "unable to create default DSCInitialization")
-		return err // Blocking: return error
-	}
-
-	l.Info("Creating default DataScienceCluster")
-	if err := upgrade.CreateDefaultDSC(ctx, p.setupClient); err != nil {
-		l.Error(err, "unable to create default DataScienceCluster")
-		return err // Blocking: return error
-	}
-
-	l.Info("Creating default GatewayConfig")
-	if err := cluster.CreateGatewayConfig(ctx, p.setupClient); err != nil {
-		l.Error(err, "unable to create default GatewayConfig")
-		return err // Blocking: return error
-	}
-
-	return nil
-}
-
-// Validator returns the platform-specific validator for managed deployments.
-func (p *Managed) Validator() platform.Validator {
+// Validator returns the platform-specific validator.
+func (p *OpenShift) Validator() platform.Validator {
 	return &validator{}
 }
 
 // Meta returns a copy of the platform's cluster metadata.
-func (p *Managed) Meta() platform.Meta {
+func (p *OpenShift) Meta() platform.Meta {
 	return p.meta
 }
 
 // ComponentRegistry returns the platform's component registry.
-func (p *Managed) ComponentRegistry() *cr.Registry {
+func (p *OpenShift) ComponentRegistry() *cr.Registry {
 	return p.componentRegistry
 }
 
 // ServiceRegistry returns the platform's service registry.
-func (p *Managed) ServiceRegistry() *sr.Registry {
+func (p *OpenShift) ServiceRegistry() *sr.Registry {
 	return p.serviceRegistry
 }

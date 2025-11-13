@@ -9,9 +9,7 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/managed"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/opendatahub"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/selfmanaged"
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/openshift"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/vanilla"
 )
 
@@ -27,11 +25,11 @@ func New(platformType common.Platform, scheme *runtime.Scheme, oconfig *cluster.
 
 	switch platformType {
 	case cluster.SelfManagedRhoai:
-		return selfmanaged.New(scheme, oconfig)
+		return openshift.New(scheme, oconfig, openshift.SelfManaged)
 	case cluster.OpenDataHub:
-		return opendatahub.New(scheme, oconfig)
+		return openshift.New(scheme, oconfig, openshift.OpenDataHub)
 	case cluster.ManagedRhoai:
-		return managed.New(scheme, oconfig)
+		return openshift.New(scheme, oconfig, openshift.Managed)
 	case cluster.Vanilla:
 		return vanilla.New(scheme, oconfig)
 	default:

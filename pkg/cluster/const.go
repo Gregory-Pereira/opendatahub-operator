@@ -22,6 +22,26 @@ const (
 	// DefaultMonitoringNamespaceRHOAI defines default namespace for monitoring.
 	DefaultMonitoringNamespaceRHOAI = "redhat-ods-monitoring"
 
+	// DefaultApplicationNamespaceODH defines default namespace for ODH applications.
+	DefaultApplicationNamespaceODH = "opendatahub"
+	// DefaultApplicationNamespaceRHOAI defines default namespace for RHOAI applications.
+	DefaultApplicationNamespaceRHOAI = "redhat-ods-applications"
+
+	// DefaultAdminGroupManaged defines default admin group for managed RHOAI.
+	DefaultAdminGroupManaged = "dedicated-admins"
+	// DefaultAdminGroupSelfManaged defines default admin group for self-managed RHOAI.
+	DefaultAdminGroupSelfManaged = "rhods-admins"
+	// DefaultAdminGroupODH defines default admin group for ODH.
+	DefaultAdminGroupODH = "odh-admins"
+
+	// DefaultConsoleLinkNamespace defines namespace for console link in managed RHOAI.
+	DefaultConsoleLinkNamespace = "redhat-ods-applications-console-link"
+
+	// SubscriptionNameRHOAI defines operator subscription name for RHOAI.
+	SubscriptionNameRHOAI = "rhods-operator"
+	// SubscriptionNameODH defines operator subscription name for ODH.
+	SubscriptionNameODH = "opendatahub-operator"
+
 	// Default cluster-scope Authentication CR name.
 	ClusterAuthenticationObj = "cluster"
 

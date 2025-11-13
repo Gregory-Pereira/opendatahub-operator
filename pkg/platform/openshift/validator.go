@@ -1,4 +1,4 @@
-package managed
+package openshift
 
 import (
 	"context"
@@ -15,14 +15,14 @@ var _ admission.Handler = (*dscHandler)(nil)
 type validator struct{}
 
 // DSCInitializationValidator returns the admission handler for DSCInitialization validation
-// in managed deployments.
+// in OpenShift deployments.
 func (v *validator) DSCInitializationValidator() admission.Handler {
 	// TODO: implement platform-specific DSCInitialization validation logic
 	return &dsciHandler{}
 }
 
 // DataScienceClusterValidator returns the admission handler for DataScienceCluster validation
-// in managed deployments.
+// in OpenShift deployments.
 func (v *validator) DataScienceClusterValidator() admission.Handler {
 	// TODO: implement platform-specific DataScienceCluster validation logic
 	return &dscHandler{}
@@ -32,7 +32,7 @@ func (v *validator) DataScienceClusterValidator() admission.Handler {
 // This will be replaced with actual platform-specific validation logic.
 type dsciHandler struct{}
 
-func (h *dsciHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (h *dsciHandler) Handle(_ context.Context, _ admission.Request) admission.Response {
 	return admission.Allowed("validation not yet implemented")
 }
 
@@ -40,6 +40,6 @@ func (h *dsciHandler) Handle(ctx context.Context, req admission.Request) admissi
 // This will be replaced with actual platform-specific validation logic.
 type dscHandler struct{}
 
-func (h *dscHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (h *dscHandler) Handle(_ context.Context, _ admission.Request) admission.Response {
 	return admission.Allowed("validation not yet implemented")
 }
