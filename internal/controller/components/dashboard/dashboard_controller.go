@@ -45,7 +45,7 @@ import (
 )
 
 // NewComponentReconciler creates a ComponentReconciler for the Dashboard API.
-func (s *componentHandler) NewComponentReconciler(ctx context.Context, mgr ctrl.Manager) error {
+func (s *ComponentHandler) NewComponentReconciler(ctx context.Context, mgr ctrl.Manager) error {
 	componentName := computeComponentName()
 
 	_, err := reconciler.ReconcilerFor(mgr, &componentApi.Dashboard{}).

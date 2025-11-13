@@ -42,7 +42,7 @@ import (
 )
 
 // NewComponentReconciler creates a ComponentReconciler for the Workbenches API.
-func (s *componentHandler) NewComponentReconciler(ctx context.Context, mgr ctrl.Manager) error {
+func (s *ComponentHandler) NewComponentReconciler(ctx context.Context, mgr ctrl.Manager) error {
 	_, err := reconciler.ReconcilerFor(mgr, &componentApi.Workbenches{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Secret{}).

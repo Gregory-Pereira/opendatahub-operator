@@ -93,6 +93,9 @@ linters:
         - predicate.Predicate
         - client.Object
         - client.Client
+        - client.Reader
+        - client.FieldIndexer
+        - client.WithWatch
         - common.PlatformObject
         - types.AsyncAssertion
         - kubernetes.Interface
@@ -102,6 +105,10 @@ linters:
         - platform.Platform
         - platform.Validator
         - admission.Handler
+        - meta.RESTMapper
+        - cache.Cache
+        - record.EventRecorder
+        - webhook.Server
     lll:
       line-length: 180
     nolintlint:
@@ -160,3 +167,7 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -1,16 +1,14 @@
 apiVersion: dscinitialization.opendatahub.io/v2
 kind: DSCInitialization
 metadata:
-  labels:
-    app.kubernetes.io/name: dscinitialization
   name: default-dsci
 spec:
   monitoring:
-    managementState: "Managed"
+    managementState: "Removed"
     namespace: 'opendatahub'
     metrics: {}
   applicationsNamespace: 'opendatahub'
   trustedCABundle:
-    managementState: "Managed"
+    managementState: "Removed"
     customCABundle: ""
 

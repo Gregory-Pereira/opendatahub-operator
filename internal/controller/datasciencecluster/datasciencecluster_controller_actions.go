@@ -67,7 +67,13 @@ func watchDataScienceClusters(ctx context.Context, cli client.Client) []reconcil
 	return requests
 }
 
-func provisionComponents(_ context.Context, rr *odhtype.ReconciliationRequest) error {
+func createProvisionComponents(registry *cr.Registry) func(context.Context, *odhtype.ReconciliationRequest) error {
+	return func(_ context.Context, rr *odhtype.ReconciliationRequest) error {
+		return provisionComponentsWithRegistry(rr, registry)
+	}
+}
+
+func provisionComponentsWithRegistry(rr *odhtype.ReconciliationRequest, registry *cr.Registry) error {
 	instance, ok := rr.Instance.(*dscv2.DataScienceCluster)
 	if !ok {
 		return fmt.Errorf("resource instance %v is not a dscv2.DataScienceCluster)", rr.Instance)
@@ -76,7 +82,7 @@ func provisionComponents(_ context.Context, rr *odhtype.ReconciliationRequest) e
 	// force gc to run
 	rr.Generated = true
 
-	err := cr.ForEach(func(component cr.ComponentHandler) error {
+	err := registry.ForEach(func(component cr.ComponentHandler) error {
 		if !component.IsEnabled(instance) {
 			return nil
 		}
@@ -96,7 +102,13 @@ func provisionComponents(_ context.Context, rr *odhtype.ReconciliationRequest) e
 	return nil
 }
 
-func updateStatus(ctx context.Context, rr *odhtype.ReconciliationRequest) error {
+func createUpdateStatus(registry *cr.Registry) func(context.Context, *odhtype.ReconciliationRequest) error {
+	return func(ctx context.Context, rr *odhtype.ReconciliationRequest) error {
+		return updateStatusWithRegistry(ctx, rr, registry)
+	}
+}
+
+func updateStatusWithRegistry(ctx context.Context, rr *odhtype.ReconciliationRequest, registry *cr.Registry) error {
 	instance, ok := rr.Instance.(*dscv2.DataScienceCluster)
 	if !ok {
 		return fmt.Errorf("resource instance %v is not a dscv2.DataScienceCluster)", rr.Instance)
@@ -104,7 +116,7 @@ func updateStatus(ctx context.Context, rr *odhtype.ReconciliationRequest) error 
 
 	instance.Status.Release = rr.Release
 
-	err := computeComponentsStatus(ctx, rr, cr.DefaultRegistry())
+	err := computeComponentsStatus(ctx, rr, registry)
 	if err != nil {
 		return err
 	}

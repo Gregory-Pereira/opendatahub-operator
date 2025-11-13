@@ -14,7 +14,6 @@ import (
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components"
-	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/conditions"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/types"
@@ -28,17 +27,13 @@ const (
 	EvalPermissionDeny  = "deny"
 )
 
-type componentHandler struct{}
+type ComponentHandler struct{}
 
-func init() { //nolint:gochecknoinits
-	cr.Add(&componentHandler{})
-}
-
-func (s *componentHandler) GetName() string {
+func (s *ComponentHandler) GetName() string {
 	return componentApi.TrustyAIComponentName
 }
 
-func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
+func (s *ComponentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
 	// Create a proper deep copy to avoid modifying the original DSC
 	spec := componentApi.TrustyAICommonSpec{}
 
@@ -70,7 +65,7 @@ func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.Pla
 	}
 }
 
-func (s *componentHandler) Init(platform common.Platform) error {
+func (s *ComponentHandler) Init(platform common.Platform) error {
 	mp := manifestsPath(platform)
 
 	if err := odhdeploy.ApplyParams(mp.String(), "params.env", imageParamMap); err != nil {
@@ -80,11 +75,11 @@ func (s *componentHandler) Init(platform common.Platform) error {
 	return nil
 }
 
-func (s *componentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
+func (s *ComponentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
 	return dsc.Spec.Components.TrustyAI.ManagementState == operatorv1.Managed
 }
 
-func (s *componentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
+func (s *ComponentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
 	cs := metav1.ConditionUnknown
 
 	c := componentApi.TrustyAI{}

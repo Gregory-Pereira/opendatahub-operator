@@ -15,7 +15,6 @@ import (
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components"
-	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/conditions"
@@ -24,17 +23,13 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/metadata/annotations"
 )
 
-type componentHandler struct{}
+type ComponentHandler struct{}
 
-func init() { //nolint:gochecknoinits
-	cr.Add(&componentHandler{})
-}
-
-func (s *componentHandler) GetName() string {
+func (s *ComponentHandler) GetName() string {
 	return componentApi.DataSciencePipelinesComponentName
 }
 
-func (s *componentHandler) Init(_ common.Platform) error {
+func (s *ComponentHandler) Init(_ common.Platform) error {
 	release := cluster.GetRelease()
 	clusterInfo := cluster.GetClusterInfo()
 	extraParams := map[string]string{
@@ -48,7 +43,7 @@ func (s *componentHandler) Init(_ common.Platform) error {
 	return nil
 }
 
-func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
+func (s *ComponentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
 	return &componentApi.DataSciencePipelines{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       componentApi.DataSciencePipelinesKind,
@@ -66,11 +61,11 @@ func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.Pla
 	}
 }
 
-func (s *componentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
+func (s *ComponentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
 	return dsc.Spec.Components.AIPipelines.ManagementState == operatorv1.Managed
 }
 
-func (s *componentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
+func (s *ComponentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
 	cs := metav1.ConditionUnknown
 
 	c := componentApi.DataSciencePipelines{}

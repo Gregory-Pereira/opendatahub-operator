@@ -25,14 +25,14 @@ import (
 
 func TestGetName(t *testing.T) {
 	g := NewWithT(t)
-	handler := &componentHandler{}
+	handler := &ComponentHandler{}
 
 	name := handler.GetName()
 	g.Expect(name).Should(Equal(componentApi.ModelRegistryComponentName))
 }
 
 func TestNewCRObject(t *testing.T) {
-	handler := &componentHandler{}
+	handler := &ComponentHandler{}
 
 	g := NewWithT(t)
 	dsc := createDSCWithModelRegistry(operatorv1.Managed)
@@ -50,7 +50,7 @@ func TestNewCRObject(t *testing.T) {
 }
 
 func TestIsEnabled(t *testing.T) {
-	handler := &componentHandler{}
+	handler := &ComponentHandler{}
 
 	tests := []struct {
 		name    string
@@ -89,7 +89,7 @@ func TestIsEnabled(t *testing.T) {
 }
 
 func TestUpdateDSCStatus(t *testing.T) {
-	handler := &componentHandler{}
+	handler := &ComponentHandler{}
 
 	t.Run("should handle enabled component with ready ModelRegistry CR", func(t *testing.T) {
 		g := NewWithT(t)

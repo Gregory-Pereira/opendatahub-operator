@@ -29,8 +29,8 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	dsciv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v2"
 	serviceApi "github.com/opendatahub-io/opendatahub-operator/v2/api/services/v1alpha1"
+	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/auth"
-	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/actions/deploy"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/actions/gc"
@@ -38,11 +38,6 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/handlers"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/reconciler"
 )
-
-//nolint:gochecknoinits
-func init() {
-	sr.Add(&ServiceHandler{})
-}
 
 // ServiceHandler implements the ServiceHandler interface for Gateway services.
 // It manages the lifecycle of GatewayConfig resources and their associated infrastructure.
@@ -67,7 +62,7 @@ func (h *ServiceHandler) GetManagementState(platform common.Platform, _ *dsciv2.
 
 // NewReconciler creates and configures a new reconciler for GatewayConfig resources.
 // It sets up ownership relationships and action chains for complete gateway lifecycle management.
-func (h *ServiceHandler) NewReconciler(ctx context.Context, mgr ctrl.Manager) error {
+func (h *ServiceHandler) NewReconciler(ctx context.Context, mgr ctrl.Manager, _ *cr.Registry) error {
 	// Note: Input validation for mgr == nil is handled by the reconciler.ReconcilerFor method
 	// which will panic as expected by existing tests
 

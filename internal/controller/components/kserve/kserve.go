@@ -14,7 +14,6 @@ import (
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components"
-	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/conditions"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/types"
@@ -23,9 +22,10 @@ import (
 )
 
 const (
-	componentName            = componentApi.KserveComponentName
-	kserveConfigMapName      = "inferenceservice-config"
-	kserveManifestSourcePath = "overlays/odh"
+	componentName       = componentApi.KserveComponentName
+	kserveConfigMapName = "inferenceservice-config"
+	// kserveManifestSourcePath = "overlays/odh".
+	kserveManifestSourcePath = "overlays/kubeflow"
 
 	// LegacyComponentName is the name of the component that is assigned to deployments
 	// via Kustomize. Since a deployment selector is immutable, we can't upgrade existing
@@ -41,14 +41,10 @@ var (
 	}
 )
 
-type componentHandler struct{}
-
-func init() { //nolint:gochecknoinits
-	cr.Add(&componentHandler{})
-}
+type ComponentHandler struct{}
 
 // Init to set oauth image.
-func (s *componentHandler) Init(platform common.Platform) error {
+func (s *ComponentHandler) Init(platform common.Platform) error {
 	mp := kserveManifestInfo(kserveManifestSourcePath)
 
 	if err := odhdeploy.ApplyParams(mp.String(), "params.env", imageParamMap); err != nil {
@@ -57,12 +53,12 @@ func (s *componentHandler) Init(platform common.Platform) error {
 	return nil
 }
 
-func (s *componentHandler) GetName() string {
+func (s *ComponentHandler) GetName() string {
 	return componentName
 }
 
 // for DSC to get component Kserve's CR.
-func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
+func (s *ComponentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
 	return &componentApi.Kserve{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       componentApi.KserveKind,
@@ -80,11 +76,11 @@ func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.Pla
 	}
 }
 
-func (s *componentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
+func (s *ComponentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
 	return dsc.Spec.Components.Kserve.ManagementState == operatorv1.Managed
 }
 
-func (s *componentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
+func (s *ComponentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
 	cs := metav1.ConditionUnknown
 
 	c := componentApi.Kserve{}

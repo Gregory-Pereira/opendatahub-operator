@@ -31,7 +31,7 @@ import (
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
 	dsciv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v2"
 	serviceApi "github.com/opendatahub-io/opendatahub-operator/v2/api/services/v1alpha1"
-	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
+	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster/gvk"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/actions/deploy"
@@ -44,23 +44,18 @@ import (
 	odhtypes "github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/types"
 )
 
-//nolint:gochecknoinits
-func init() {
-	sr.Add(&serviceHandler{})
+type ServiceHandler struct {
 }
 
-type serviceHandler struct {
-}
-
-func (h *serviceHandler) Init(_ common.Platform) error {
+func (h *ServiceHandler) Init(_ common.Platform) error {
 	return nil
 }
 
-func (h *serviceHandler) GetName() string {
+func (h *ServiceHandler) GetName() string {
 	return ServiceName
 }
 
-func (h *serviceHandler) GetManagementState(platform common.Platform, dsci *dsciv2.DSCInitialization) operatorv1.ManagementState {
+func (h *ServiceHandler) GetManagementState(platform common.Platform, dsci *dsciv2.DSCInitialization) operatorv1.ManagementState {
 	// Managed cluster must have monitoring enabled even if user manually turns it off
 	if platform == cluster.ManagedRhoai {
 		return operatorv1.Managed
@@ -84,7 +79,7 @@ func monitoringNamespace(_ context.Context, rr *odhtypes.ReconciliationRequest) 
 	return m.Spec.Namespace, nil
 }
 
-func (h *serviceHandler) NewReconciler(ctx context.Context, mgr ctrl.Manager) error {
+func (h *ServiceHandler) NewReconciler(ctx context.Context, mgr ctrl.Manager, componentRegistry *cr.Registry) error {
 	_, err := reconciler.ReconcilerFor(mgr, &serviceApi.Monitoring{}).
 		Owns(&rbacv1.Role{}).
 		Owns(&rbacv1.RoleBinding{}).
@@ -125,12 +120,12 @@ func (h *serviceHandler) NewReconciler(ctx context.Context, mgr ctrl.Manager) er
 		).
 		// These are only for SRE Monitoring
 		WithAction(initialize).
-		WithAction(updatePrometheusConfigMap).
+		WithAction(createUpdatePrometheusConfigMap(componentRegistry)).
 		// These are only for new monitoring stack dependent Operators
 		WithAction(addMonitoringCapability).
 		WithAction(deployMonitoringStackWithQuerier).
 		WithAction(deployTracingStack).
-		WithAction(deployAlerting).
+		WithAction(createDeployAlerting(componentRegistry)).
 		WithAction(deployOpenTelemetryCollector).
 		WithAction(template.NewAction(
 			template.WithDataFn(getTemplateData),

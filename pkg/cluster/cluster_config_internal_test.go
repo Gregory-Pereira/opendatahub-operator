@@ -186,9 +186,9 @@ func TestSetApplicationNamespace(t *testing.T) {
 				clusterConfig.Release.Name = ""
 			}()
 
-			// Execute - call internal function directly
+			// Execute - call public function directly
 			ctx := context.Background()
-			err := setApplicationNamespace(ctx, fakeClient)
+			err := SetApplicationNamespace(ctx, fakeClient, tc.platform)
 
 			// Assert error
 			if tc.expectError {

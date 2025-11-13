@@ -25,9 +25,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
 	dsciv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v2"
+	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/actions/deploy"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/actions/gc"
@@ -36,31 +36,29 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/types"
 )
 
-func NewDataScienceClusterReconciler(ctx context.Context, mgr ctrl.Manager) error {
+func NewDataScienceClusterReconciler(ctx context.Context, mgr ctrl.Manager, componentRegistry *cr.Registry) error {
 	componentsPredicate := dependent.New(dependent.WithWatchStatus(true))
 
-	_, err := reconciler.ReconcilerFor(mgr, &dscv2.DataScienceCluster{}).
-		Owns(&componentApi.Dashboard{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.Workbenches{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.Ray{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.ModelRegistry{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.TrustyAI{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.Kueue{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.TrainingOperator{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.DataSciencePipelines{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.Kserve{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.ModelController{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.FeastOperator{}, reconciler.WithPredicates(componentsPredicate)).
-		Owns(&componentApi.LlamaStackOperator{}, reconciler.WithPredicates(componentsPredicate)).
-		Watches(
-			&dsciv2.DSCInitialization{},
-			reconciler.WithEventMapper(func(ctx context.Context, _ client.Object) []reconcile.Request {
-				return watchDataScienceClusters(ctx, mgr.GetClient())
-			})).
+	b := reconciler.ReconcilerFor(mgr, &dscv2.DataScienceCluster{})
+
+	_ = componentRegistry.ForEach(func(ch cr.ComponentHandler) error {
+		b = b.Owns(
+			ch.NewCRObject(&dscv2.DataScienceCluster{}),
+			reconciler.WithPredicates(componentsPredicate),
+		)
+
+		return nil
+	})
+
+	_, err := b.Watches(
+		&dsciv2.DSCInitialization{},
+		reconciler.WithEventMapper(func(ctx context.Context, _ client.Object) []reconcile.Request {
+			return watchDataScienceClusters(ctx, mgr.GetClient())
+		})).
 		WithAction(initialize).
 		WithAction(checkPreConditions).
-		WithAction(updateStatus).
-		WithAction(provisionComponents).
+		WithAction(createUpdateStatus(componentRegistry)).
+		WithAction(createProvisionComponents(componentRegistry)).
 		WithAction(deploy.NewAction(
 			deploy.WithCache()),
 		).

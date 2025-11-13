@@ -13,7 +13,6 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
 	dscv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/datasciencecluster/v2"
-	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/status"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/conditions"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/controller/types"
@@ -21,17 +20,13 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/metadata/annotations"
 )
 
-type componentHandler struct{}
+type ComponentHandler struct{}
 
-func init() { //nolint:gochecknoinits
-	cr.Add(&componentHandler{})
-}
-
-func (s *componentHandler) GetName() string {
+func (s *ComponentHandler) GetName() string {
 	return componentApi.ModelControllerComponentName
 }
 
-func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
+func (s *ComponentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.PlatformObject {
 	// extra logic to set the management .spec.component.managementState, to not leave blank {}
 	kState := operatorv1.Removed
 	if dsc.Spec.Components.Kserve.ManagementState == operatorv1.Managed {
@@ -70,7 +65,7 @@ func (s *componentHandler) NewCRObject(dsc *dscv2.DataScienceCluster) common.Pla
 }
 
 // Init for set images.
-func (s *componentHandler) Init(_ common.Platform) error {
+func (s *ComponentHandler) Init(_ common.Platform) error {
 	// Update image parameters
 	if err := odhdeploy.ApplyParams(manifestsPath().String(), "params.env", imageParamMap); err != nil {
 		return fmt.Errorf("failed to update images on path %s: %w", manifestsPath(), err)
@@ -79,12 +74,12 @@ func (s *componentHandler) Init(_ common.Platform) error {
 	return nil
 }
 
-func (s *componentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
+func (s *ComponentHandler) IsEnabled(dsc *dscv2.DataScienceCluster) bool {
 	// ModelController is enabled only by KServe in RHOAI 3.0
-	return cr.IsComponentEnabled(componentApi.KserveComponentName, dsc)
+	return dsc.Spec.Components.Kserve.ManagementState == operatorv1.Managed
 }
 
-func (s *componentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
+func (s *ComponentHandler) UpdateDSCStatus(ctx context.Context, rr *types.ReconciliationRequest) (metav1.ConditionStatus, error) {
 	cs := metav1.ConditionUnknown
 
 	c := componentApi.ModelController{}

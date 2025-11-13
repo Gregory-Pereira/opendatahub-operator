@@ -33,10 +33,16 @@ type Registry struct {
 	handlers []ComponentHandler
 }
 
-var r = &Registry{}
+// NewRegistry creates a new component registry instance.
+// Accepts optional ComponentHandlers to register during initialization.
+func NewRegistry(handlers ...ComponentHandler) *Registry {
+	return &Registry{
+		handlers: append([]ComponentHandler{}, handlers...),
+	}
+}
 
 // Add registers a new ComponentHandler to the registry.
-// not thread safe, supposed to be called during init.
+// not thread safe, supposed to be called during initialization.
 func (r *Registry) Add(ch ComponentHandler) {
 	r.handlers = append(r.handlers, ch)
 }
@@ -62,22 +68,4 @@ func (r *Registry) IsComponentEnabled(componentName string, dsc *dscv2.DataScien
 		}
 	}
 	return false
-}
-
-func Add(ch ComponentHandler) {
-	r.Add(ch)
-}
-
-func ForEach(f func(ch ComponentHandler) error) error {
-	return r.ForEach(f)
-}
-
-func DefaultRegistry() *Registry {
-	return r
-}
-
-// IsComponentEnabled checks if a component with the given name is enabled in the DataScienceCluster
-// using the default registry. Returns false if the component is not found.
-func IsComponentEnabled(componentName string, dsc *dscv2.DataScienceCluster) bool {
-	return r.IsComponentEnabled(componentName, dsc)
 }

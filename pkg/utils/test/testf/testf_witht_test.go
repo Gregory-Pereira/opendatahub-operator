@@ -61,9 +61,7 @@ func prepareUpdateTestConfigMap(g Gomega, template corev1.ConfigMap, expectedMat
 
 // prepareExistingConfigMapTest creates a ConfigMap with pre-existing client and returns test setup for Update/Patch tests.
 // The ConfigMap already exists in the fake client, and the test applies a transformer to it.
-//
-//nolint:ireturn
-func prepareExistingConfigMapTest(g Gomega, cmName string) (types.GomegaMatcher, client.ObjectKey, testf.TransformFn, *testf.TestContext) {
+func prepareExistingConfigMapTest(g Gomega, cmName string) (types.GomegaMatcher, client.ObjectKey, testf.TransformFn, *testf.TestContext) { //nolint:ireturn
 	cm := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",

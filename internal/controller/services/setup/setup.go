@@ -9,34 +9,29 @@ import (
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	dsciv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v2"
-	sr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/services/registry"
+	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 )
 
 const (
 	ServiceName = "setupcontroller"
 )
 
-//nolint:gochecknoinits
-func init() {
-	sr.Add(&serviceHandler{})
+type ServiceHandler struct {
 }
 
-type serviceHandler struct {
-}
-
-func (h *serviceHandler) Init(_ common.Platform) error {
+func (h *ServiceHandler) Init(_ common.Platform) error {
 	return nil
 }
 
-func (h *serviceHandler) GetName() string {
+func (h *ServiceHandler) GetName() string {
 	return ServiceName
 }
 
-func (h *serviceHandler) GetManagementState(_ common.Platform, _ *dsciv2.DSCInitialization) operatorv1.ManagementState {
+func (h *ServiceHandler) GetManagementState(_ common.Platform, _ *dsciv2.DSCInitialization) operatorv1.ManagementState {
 	return operatorv1.Managed
 }
 
-func (h *serviceHandler) NewReconciler(_ context.Context, mgr ctrl.Manager) error {
+func (h *ServiceHandler) NewReconciler(_ context.Context, mgr ctrl.Manager, _ *cr.Registry) error {
 	rec := &SetupControllerReconciler{
 		Client: mgr.GetClient(),
 	}

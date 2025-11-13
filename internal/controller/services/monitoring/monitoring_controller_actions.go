@@ -113,10 +113,17 @@ func setConditionFalse(rr *odhtypes.ReconciliationRequest, conditionType, reason
 	)
 }
 
+// createUpdatePrometheusConfigMap creates an action that updates the Prometheus config map based on component states.
+func createUpdatePrometheusConfigMap(registry *cr.Registry) func(context.Context, *odhtypes.ReconciliationRequest) error {
+	return func(ctx context.Context, rr *odhtypes.ReconciliationRequest) error {
+		return updatePrometheusConfigMapWithRegistry(ctx, rr, registry)
+	}
+}
+
 // if DSC has component as Removed, we remove component's Prom Rules.
 // only when DSC has component as Managed and component CR is in "Ready" state, we add rules to Prom Rules.
 // all other cases, we do not change Prom rules for component.
-func updatePrometheusConfigMap(ctx context.Context, rr *odhtypes.ReconciliationRequest) error {
+func updatePrometheusConfigMapWithRegistry(ctx context.Context, rr *odhtypes.ReconciliationRequest, registry *cr.Registry) error {
 	// Skip update prom config: if cluster is NOT ManagedRhoai
 	if rr.Release.Name != cluster.ManagedRhoai {
 		return nil
@@ -132,7 +139,7 @@ func updatePrometheusConfigMap(ctx context.Context, rr *odhtypes.ReconciliationR
 		return fmt.Errorf("failed to retrieve DataScienceCluster: %w", err)
 	}
 
-	return cr.ForEach(func(ch cr.ComponentHandler) error {
+	return registry.ForEach(func(ch cr.ComponentHandler) error {
 		ci := ch.NewCRObject(dsc)
 		if ch.IsEnabled(dsc) {
 			ready, err := isComponentReady(ctx, rr.Client, ci)
@@ -303,7 +310,14 @@ func deployOpenTelemetryCollector(ctx context.Context, rr *odhtypes.Reconciliati
 	return nil
 }
 
-func deployAlerting(ctx context.Context, rr *odhtypes.ReconciliationRequest) error {
+// createDeployAlerting creates an action that deploys alerting rules for all components.
+func createDeployAlerting(registry *cr.Registry) func(context.Context, *odhtypes.ReconciliationRequest) error {
+	return func(ctx context.Context, rr *odhtypes.ReconciliationRequest) error {
+		return deployAlertingWithRegistry(ctx, rr, registry)
+	}
+}
+
+func deployAlertingWithRegistry(ctx context.Context, rr *odhtypes.ReconciliationRequest, registry *cr.Registry) error {
 	monitoring, ok := rr.Instance.(*serviceApi.Monitoring)
 	if !ok {
 		return errors.New("instance is not of type *services.Monitoring")
@@ -358,7 +372,7 @@ func deployAlerting(ctx context.Context, rr *odhtypes.ReconciliationRequest) err
 	var addErrors []error
 	var cleanupErrors []error
 
-	forEachErr := cr.ForEach(func(ch cr.ComponentHandler) error {
+	forEachErr := registry.ForEach(func(ch cr.ComponentHandler) error {
 		componentName := ch.GetName()
 		ci := ch.NewCRObject(dsc)
 

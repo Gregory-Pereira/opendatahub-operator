@@ -9,6 +9,7 @@ import (
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/api/common"
 	dsciv2 "github.com/opendatahub-io/opendatahub-operator/v2/api/dscinitialization/v2"
+	cr "github.com/opendatahub-io/opendatahub-operator/v2/internal/controller/components/registry"
 )
 
 // ServiceHandler is an interface to manage a service
@@ -17,7 +18,7 @@ type ServiceHandler interface {
 	Init(platform common.Platform) error
 	GetName() string
 	GetManagementState(platform common.Platform, dsci *dsciv2.DSCInitialization) operatorv1.ManagementState
-	NewReconciler(ctx context.Context, mgr ctrl.Manager) error
+	NewReconciler(ctx context.Context, mgr ctrl.Manager, componentRegistry *cr.Registry) error
 }
 
 // Registry is a struct that maintains a list of registered ServiceHandlers.
@@ -25,10 +26,16 @@ type Registry struct {
 	handlers []ServiceHandler
 }
 
-var r = &Registry{}
+// NewRegistry creates a new service registry instance.
+// Accepts optional ServiceHandlers to register during initialization.
+func NewRegistry(handlers ...ServiceHandler) *Registry {
+	return &Registry{
+		handlers: append([]ServiceHandler{}, handlers...),
+	}
+}
 
 // Add registers a new ServiceHandler to the registry.
-// not thread safe, supposed to be called during init.
+// not thread safe, supposed to be called during initialization.
 func (r *Registry) Add(ch ServiceHandler) {
 	r.handlers = append(r.handlers, ch)
 }
@@ -43,16 +50,4 @@ func (r *Registry) ForEach(f func(ch ServiceHandler) error) error {
 	}
 
 	return errs.ErrorOrNil()
-}
-
-func Add(ch ServiceHandler) {
-	r.Add(ch)
-}
-
-func ForEach(f func(ch ServiceHandler) error) error {
-	return r.ForEach(f)
-}
-
-func DefaultRegistry() *Registry {
-	return r
 }

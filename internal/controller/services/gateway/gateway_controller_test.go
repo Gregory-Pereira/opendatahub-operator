@@ -125,7 +125,7 @@ func TestServiceHandler_NewReconciler(t *testing.T) {
 			}
 		}()
 
-		_ = handler.NewReconciler(ctx, nil)
+		_ = handler.NewReconciler(ctx, nil, nil)
 	})
 }
 
@@ -149,7 +149,7 @@ func TestServiceHandler_Implements_ServiceInterface(t *testing.T) {
 		r := recover()
 		g.Expect(r).ShouldNot(BeNil(), "Should panic when manager is nil")
 	}()
-	_ = handler.NewReconciler(t.Context(), nil)
+	_ = handler.NewReconciler(t.Context(), nil, nil)
 }
 
 func TestServiceHandler_ServiceName_Consistency(t *testing.T) {
