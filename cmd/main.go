@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	ocappsv1 "github.com/openshift/api/apps/v1" //nolint:importas //reason: conflicts with appsv1 "k8s.io/api/apps/v1"
 	buildv1 "github.com/openshift/api/build/v1"
@@ -34,8 +33,6 @@ import (
 	ofapiv1alpha1 "github.com/operator-framework/api/pkg/operators/v1alpha1"
 	ofapiv2 "github.com/operator-framework/api/pkg/operators/v2"
 	promv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -47,9 +44,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	gwapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	componentApi "github.com/opendatahub-io/opendatahub-operator/v2/api/components/v1alpha1"
@@ -64,7 +59,6 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/logger"
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/platform/factory"
-	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/utils/flags"
 )
 
 var (
@@ -100,65 +94,29 @@ func init() { //nolint:gochecknoinits
 	utilruntime.Must(admissionregistrationv1.AddToScheme(scheme))
 	utilruntime.Must(promv1.AddToScheme(scheme))
 	utilruntime.Must(operatorv1.Install(scheme))
-	utilruntime.Must(consolev1.AddToScheme(scheme))
+	utilruntime.Must(consolev1.Install(scheme))
 	utilruntime.Must(securityv1.Install(scheme))
 	utilruntime.Must(templatev1.Install(scheme))
 	utilruntime.Must(gwapiv1.Install(scheme))
 }
 
 func main() { //nolint:funlen
-	// Viper settings
-	viper.SetEnvPrefix("ODH_MANAGER")
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	viper.AutomaticEnv()
-
-	// define flags and env vars
-	if err := flags.AddOperatorFlagsAndEnvvars(viper.GetEnvPrefix()); err != nil {
-		fmt.Printf("Error in adding flags or binding env vars: %s", err.Error())
-		os.Exit(1)
-	}
-
-	// parse and bind flags
-	pflag.Parse()
-	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
-		fmt.Printf("Error in binding flags: %s", err.Error())
-		os.Exit(1)
-	}
-
-	oconfig, err := cluster.LoadConfig()
+	// Load configuration (flags, env vars, rest.Config, zap options)
+	cfg, err := cluster.LoadConfig()
 	if err != nil {
-		fmt.Printf("Error loading configuration: %s", err.Error())
+		fmt.Printf("Error loading configuration: %s\n", err.Error())
 		os.Exit(1)
 	}
 
-	// After getting the zap related configs an ad hoc flag set is created so the zap BindFlags mechanism can be reused
-	zapFlagSet := flags.NewZapFlagSet()
+	// Configure logger
+	ctrl.SetLogger(logger.NewLogger(cfg.LogMode, cfg.ZapOptions))
 
-	opts := zap.Options{}
-	opts.BindFlags(zapFlagSet)
-
-	err = flags.ParseZapFlags(zapFlagSet, oconfig.ZapDevel, oconfig.ZapEncoder, oconfig.ZapLogLevel, oconfig.ZapStacktrace, oconfig.ZapTimeEncoding)
-	if err != nil {
-		fmt.Printf("Error in parsing zap flags: %s", err.Error())
-		os.Exit(1)
-	}
-
-	ctrl.SetLogger(logger.NewLogger(oconfig.LogMode, &opts))
-
-	// root context
+	// Setup context
 	ctx := ctrl.SetupSignalHandler()
 	ctx = logf.IntoContext(ctx, setupLog)
 
-	// Get rest.Config and attach to OperatorConfig
-	setupCfg, err := config.GetConfig()
-	if err != nil {
-		setupLog.Error(err, "error getting config for setup")
-		os.Exit(1)
-	}
-	oconfig.RestConfig = setupCfg
-
 	// Create temporary uncached client to determine platform type
-	setupClient, err := client.New(setupCfg, client.Options{Scheme: scheme})
+	setupClient, err := client.New(cfg.RestConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		setupLog.Error(err, "error getting client for platform detection")
 		os.Exit(1)
@@ -172,7 +130,7 @@ func main() { //nolint:funlen
 	}
 
 	// Create platform instance (platform creates its own setupClient)
-	plat, err := factory.New(platformType, scheme, oconfig)
+	plat, err := factory.New(platformType, scheme, cfg)
 	if err != nil {
 		setupLog.Error(err, "unable to create platform")
 		os.Exit(1)

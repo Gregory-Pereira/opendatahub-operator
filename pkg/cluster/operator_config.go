@@ -2,9 +2,15 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/utils/flags"
 )
 
 // OperatorConfig defines the operator manager configuration loaded from environment
@@ -25,16 +31,60 @@ type OperatorConfig struct {
 	ZapTimeEncoding string `mapstructure:"zap-time-encoding"`
 
 	// Kubernetes connection configuration
-	// Not loaded from viper - set programmatically after LoadConfig()
 	RestConfig *rest.Config `mapstructure:"-"`
+
+	// Zap logger options
+	ZapOptions *zap.Options `mapstructure:"-"`
 }
 
-// LoadConfig loads operator configuration from Viper.
-// Viper must be configured with appropriate env prefix and flags before calling this function.
+// LoadConfig loads complete operator configuration including flags parsing and rest.Config loading.
+// This is the main entry point for configuration initialization.
 func LoadConfig() (*OperatorConfig, error) {
+	// Setup Viper
+	viper.SetEnvPrefix("ODH_MANAGER")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
+
+	// Define flags and env vars
+	if err := flags.AddOperatorFlagsAndEnvvars(viper.GetEnvPrefix()); err != nil {
+		return nil, fmt.Errorf("error adding flags or binding env vars: %w", err)
+	}
+
+	// Parse and bind flags
+	pflag.Parse()
+	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
+		return nil, fmt.Errorf("error binding flags: %w", err)
+	}
+
+	// Unmarshal configuration from Viper
 	var operatorConfig OperatorConfig
 	if err := viper.Unmarshal(&operatorConfig); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal operator manager config: %w", err)
 	}
+
+	// Load Kubernetes rest.Config
+	restConfig, err := config.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("error getting rest config: %w", err)
+	}
+	operatorConfig.RestConfig = restConfig
+
+	// Configure zap logger options
+	zapFlagSet := flags.NewZapFlagSet()
+	opts := &zap.Options{}
+	opts.BindFlags(zapFlagSet)
+
+	if err := flags.ParseZapFlags(
+		zapFlagSet,
+		operatorConfig.ZapDevel,
+		operatorConfig.ZapEncoder,
+		operatorConfig.ZapLogLevel,
+		operatorConfig.ZapStacktrace,
+		operatorConfig.ZapTimeEncoding,
+	); err != nil {
+		return nil, fmt.Errorf("error parsing zap flags: %w", err)
+	}
+	operatorConfig.ZapOptions = opts
+
 	return &operatorConfig, nil
 }
