@@ -7,7 +7,7 @@ data:
   explainers: "{}"
   oauthProxy: |- 
     {
-      "image" : "$(kube-rbac-proxy)",
+      "image" : "kube-rbac-proxy_PLACEHOLDER",
       "memoryRequest": "64Mi",
       "memoryLimit": "128Mi",
       "cpuRequest": "100m",
@@ -15,7 +15,7 @@ data:
     }
   storageInitializer: |-
     {
-        "image" : "$(kserve-storage-initializer)",
+        "image" : "kserve-storage-initializer_PLACEHOLDER",
         "memoryRequest": "100Mi",
         "memoryLimit": "24Gi",
         "cpuRequest": "100m",
@@ -28,7 +28,7 @@ data:
   ingress: |-
     {
         "enableGatewayApi": false,
-        "kserveIngressGateway": "openshift-ingress/openshift-ai-inference",
+        "kserveIngressGateway": "$(kserve-ingress-gateway)",
         "ingressGateway" : "knative-serving/knative-ingress-gateway",
         "knativeLocalGatewayService" : "knative-local-gateway.istio-system.svc.cluster.local",
         "ingressService" : "istio-ingressgateway.istio-system.svc.cluster.local",
@@ -43,7 +43,7 @@ data:
     }
   logger: |-
     {
-        "image" : "$(kserve-agent)",
+        "image" : "kserve-agent_PLACEHOLDER",
         "memoryRequest": "100Mi",
         "memoryLimit": "1Gi",
         "cpuRequest": "100m",
@@ -52,7 +52,7 @@ data:
     }
   batcher: |-
     {
-        "image" : "$(kserve-agent)",
+        "image" : "kserve-agent_PLACEHOLDER",
         "memoryRequest": "1Gi",
         "memoryLimit": "1Gi",
         "cpuRequest": "1",
@@ -60,7 +60,7 @@ data:
     }
   agent: |-
     {
-        "image" : "$(kserve-agent)",
+        "image" : "kserve-agent_PLACEHOLDER",
         "memoryRequest": "100Mi",
         "memoryLimit": "1Gi",
         "cpuRequest": "100m",
@@ -68,7 +68,7 @@ data:
     }
   router: |-
     {
-        "image" : "$(kserve-router)",
+        "image" : "kserve-router_PLACEHOLDER",
         "memoryRequest": "100Mi",
         "memoryLimit": "1Gi",
         "cpuRequest": "100m",

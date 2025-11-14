@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/cluster"
+	odhdeploy "github.com/opendatahub-io/opendatahub-operator/v2/pkg/deploy"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -19,9 +21,23 @@ import (
 	"github.com/opendatahub-io/opendatahub-operator/v2/pkg/metadata/labels"
 )
 
-func initialize(_ context.Context, rr *odhtypes.ReconciliationRequest) error {
+func initialize(ctx context.Context, rr *odhtypes.ReconciliationRequest) error {
 	rr.Manifests = []odhtypes.ManifestInfo{
 		kserveManifestInfo(kserveManifestSourcePath),
+	}
+
+	appNs, err := cluster.ApplicationNamespace(ctx, rr.Client)
+	if err != nil {
+		return odherrors.NewStopErrorW(err)
+	}
+
+	extraParamsMap := map[string]string{
+		"kserve-ingress-gateway": appNs + "/" + "kserve-gw",
+		"kserve-namespace":       appNs,
+	}
+
+	if err := odhdeploy.ApplyParams(rr.Manifests[0].String(), "params.env", nil, extraParamsMap); err != nil {
+		return fmt.Errorf("failed to update images on path %s: %w", rr.Manifests[0].String(), err)
 	}
 
 	return nil

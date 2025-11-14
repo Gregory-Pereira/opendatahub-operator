@@ -142,6 +142,21 @@ vars:
     apiVersion: v1
     kind: ConfigMap
     name: kserve-parameters
+- fieldref:
+    fieldpath: data.kserve-ingress-gateway
+  name: kserve-ingress-gateway
+  objref:
+    apiVersion: v1
+    kind: ConfigMap
+    name: kserve-parameters
+- fieldref:
+    fieldpath: data.kserve-namespace
+  name: kserve-namespace
+  objref:
+    apiVersion: v1
+    kind: ConfigMap
+    name: kserve-parameters
+   
 
 configurations:
 - params.yaml
