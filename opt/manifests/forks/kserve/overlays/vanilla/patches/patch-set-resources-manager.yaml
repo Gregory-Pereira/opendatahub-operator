@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kserve-controller-manager
+  namespace: kserve
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        env:
+          - name: "SERVICE_CA_SIGNING_SECRET_NAME"
+            value: "kserve-ca"
+          - name: "SERVICE_CA_SIGNING_SECRET_NAMESPACE"
+            value: "cert-manager"
+        resources:
+          limits:
+            cpu: 500m
+            memory: 500Mi
+
+
