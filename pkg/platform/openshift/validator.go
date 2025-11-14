@@ -14,30 +14,20 @@ var _ admission.Handler = (*dscHandler)(nil)
 
 type validator struct{}
 
-// DSCInitializationValidator returns the admission handler for DSCInitialization validation
-// in OpenShift deployments.
 func (v *validator) DSCInitializationValidator() admission.Handler {
-	// TODO: implement platform-specific DSCInitialization validation logic
 	return &dsciHandler{}
 }
 
-// DataScienceClusterValidator returns the admission handler for DataScienceCluster validation
-// in OpenShift deployments.
 func (v *validator) DataScienceClusterValidator() admission.Handler {
-	// TODO: implement platform-specific DataScienceCluster validation logic
 	return &dscHandler{}
 }
 
-// dsciHandler is a temporary admission handler for DSCInitialization validation.
-// This will be replaced with actual platform-specific validation logic.
 type dsciHandler struct{}
 
 func (h *dsciHandler) Handle(_ context.Context, _ admission.Request) admission.Response {
 	return admission.Allowed("validation not yet implemented")
 }
 
-// dscHandler is a temporary admission handler for DataScienceCluster validation.
-// This will be replaced with actual platform-specific validation logic.
 type dscHandler struct{}
 
 func (h *dscHandler) Handle(_ context.Context, _ admission.Request) admission.Response {

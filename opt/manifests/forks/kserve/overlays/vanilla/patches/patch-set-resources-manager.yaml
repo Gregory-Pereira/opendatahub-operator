@@ -12,7 +12,7 @@ spec:
           - name: "SERVICE_CA_SIGNING_SECRET_NAME"
             value: "kserve-ca"
           - name: "SERVICE_CA_SIGNING_SECRET_NAMESPACE"
-            value: "cert-manager"
+            value: "kserve"
         resources:
           limits:
             cpu: 500m

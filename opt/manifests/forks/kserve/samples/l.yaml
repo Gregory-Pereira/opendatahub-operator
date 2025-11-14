@@ -9,10 +9,10 @@ spec:
     uri: hf://facebook/opt-125m
     name: facebook/opt-125m
   replicas: 1
-#  router:
-#    scheduler: { }
-#    route: { }
-#    gateway: { }
+  router:
+    scheduler: { }
+    route: { }
+    gateway: {}
   template:
     containers:
       - name: main

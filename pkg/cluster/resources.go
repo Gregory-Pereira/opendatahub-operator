@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 	"slices"
 	"time"
@@ -137,6 +138,11 @@ func GetDSCI(ctx context.Context, cli client.Client) (*dsciv2.DSCInitialization,
 // ApplicationNamespace returns the applications namespace from DSCInitialization.
 // Returns an error if DSCI is not found or cannot be retrieved.
 func ApplicationNamespace(ctx context.Context, cli client.Client) (string, error) {
+	ns := os.Getenv("ODH_APPLICATION_NAMESPACE")
+	if ns != "" {
+		return "", nil
+	}
+
 	dsci, err := GetDSCI(ctx, cli)
 	if err != nil {
 		if k8serr.IsNotFound(err) {
@@ -144,12 +150,18 @@ func ApplicationNamespace(ctx context.Context, cli client.Client) (string, error
 		}
 		return "", fmt.Errorf("failed to get DSCInitialization: %w", err)
 	}
+
 	return dsci.Spec.ApplicationsNamespace, nil
 }
 
 // MonitoringNamespace returns the monitoring namespace from DSCInitialization.
 // Returns an error if DSCI is not found or cannot be retrieved.
 func MonitoringNamespace(ctx context.Context, cli client.Client) (string, error) {
+	ns := os.Getenv("ODH_MONITORING_NAMESPACE")
+	if ns != "" {
+		return "", nil
+	}
+
 	dsci, err := GetDSCI(ctx, cli)
 	if err != nil {
 		if k8serr.IsNotFound(err) {
@@ -157,6 +169,7 @@ func MonitoringNamespace(ctx context.Context, cli client.Client) (string, error)
 		}
 		return "", fmt.Errorf("failed to get DSCInitialization: %w", err)
 	}
+
 	return dsci.Spec.Monitoring.Namespace, nil
 }
 
