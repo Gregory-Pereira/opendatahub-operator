@@ -3,6 +3,8 @@
 package webhook
 
 import (
+	"os"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/opendatahub-io/opendatahub-operator/v2/internal/webhook/dashboard"
@@ -19,25 +21,31 @@ import (
 
 // RegisterAllWebhooks registers all webhook setup functions with the given manager.
 // Platform validators are injected into DSCI and DSC webhooks for platform-specific validation.
+// DSC webhooks are only registered if DISABLE_DSC_CONTROLLER is not set to true.
 // Returns the first error encountered during registration, or nil if all succeed.
 func RegisterAllWebhooks(mgr ctrl.Manager, plat platform.Platform) error {
 	// Get platform-specific validators
 	platformValidator := plat.Validator()
 	dsciValidator := platformValidator.DSCInitializationValidator()
-	dscValidator := platformValidator.DataScienceClusterValidator()
 
-	// Register webhooks with platform validators injected where needed
-	if err := dscv1webhook.RegisterWebhooks(mgr, dscValidator); err != nil {
-		return err
-	}
-	if err := dscv2webhook.RegisterWebhooks(mgr, dscValidator); err != nil {
-		return err
-	}
+	// Register DSCI webhooks (always needed)
 	if err := dsciv1webhook.RegisterWebhooks(mgr, dsciValidator); err != nil {
 		return err
 	}
 	if err := dsciv2webhook.RegisterWebhooks(mgr, dsciValidator); err != nil {
 		return err
+	}
+
+	// Register DSC webhooks only if DSC controller is enabled
+	if os.Getenv("DISABLE_DSC_CONTROLLER") != "true" {
+		dscValidator := platformValidator.DataScienceClusterValidator()
+
+		if err := dscv1webhook.RegisterWebhooks(mgr, dscValidator); err != nil {
+			return err
+		}
+		if err := dscv2webhook.RegisterWebhooks(mgr, dscValidator); err != nil {
+			return err
+		}
 	}
 
 	// Register other webhooks (no platform validation needed)

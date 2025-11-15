@@ -69,6 +69,9 @@ func (s *ComponentHandler) NewComponentReconciler(ctx context.Context, mgr ctrl.
 		OwnsGVK(gvk.InferenceModelV1alpha2, reconciler.Dynamic(reconciler.CrdExists(gvk.InferenceModelV1alpha2))).
 		OwnsGVK(gvk.LLMInferenceServiceConfigV1Alpha1, reconciler.Dynamic(reconciler.CrdExists(gvk.LLMInferenceServiceConfigV1Alpha1))).
 		OwnsGVK(gvk.LLMInferenceServiceV1Alpha1, reconciler.Dynamic(reconciler.CrdExists(gvk.LLMInferenceServiceV1Alpha1))).
+		OwnsGVK(gvk.CertManagerCertificate, reconciler.Dynamic(reconciler.CrdExists(gvk.CertManagerCertificate))).
+		OwnsGVK(gvk.CertManagerIssuer, reconciler.Dynamic(reconciler.CrdExists(gvk.CertManagerIssuer))).
+		OwnsGVK(gvk.CertManagerClusterIssuer, reconciler.Dynamic(reconciler.CrdExists(gvk.CertManagerClusterIssuer))).
 
 		// operands - watched
 		//

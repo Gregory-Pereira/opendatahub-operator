@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"fmt"
+	"os"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -14,16 +15,36 @@ import (
 )
 
 // SetupCoreReconcilers sets up DSCI and DSC reconcilers.
-// These reconcilers are required for all platforms.
+// DSCI reconciler is always created. DSC reconciler is created unless DISABLE_DSC_CONTROLLER=true.
 func SetupCoreReconcilers(ctx context.Context, mgr ctrl.Manager, plat Platform) error {
-	if err := dscictrl.NewDSCInitializationReconciler(ctx, mgr, plat.Meta().Distribution); err != nil {
+	if os.Getenv("DISABLE_DSCI_CONTROLLER") != "true" {
+		if err := SetupDSCIReconciler(ctx, mgr, plat.Meta().Distribution); err != nil {
+			return err
+		}
+	}
+
+	if os.Getenv("DISABLE_DSC_CONTROLLER") != "true" {
+		if err := SetupDSCReconciler(ctx, mgr, plat.ComponentRegistry()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SetupDSCIReconciler creates the DSCInitialization reconciler.
+func SetupDSCIReconciler(ctx context.Context, mgr ctrl.Manager, dist string) error {
+	if err := dscictrl.NewDSCInitializationReconciler(ctx, mgr, dist); err != nil {
 		return fmt.Errorf("unable to create DSCI controller: %w", err)
 	}
+	return nil
+}
 
-	if err := dscctrl.NewDataScienceClusterReconciler(ctx, mgr, plat.ComponentRegistry()); err != nil {
+// SetupDSCReconciler creates the DataScienceCluster reconciler.
+func SetupDSCReconciler(ctx context.Context, mgr ctrl.Manager, compRegistry *cr.Registry) error {
+	if err := dscctrl.NewDataScienceClusterReconciler(ctx, mgr, compRegistry); err != nil {
 		return fmt.Errorf("unable to create DSC controller: %w", err)
 	}
-
 	return nil
 }
 

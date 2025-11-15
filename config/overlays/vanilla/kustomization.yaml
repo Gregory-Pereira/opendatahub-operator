@@ -38,6 +38,8 @@ patches:
 # Add webhook and auth proxy patches to manager
 - path: ../../default/manager_auth_proxy_patch.yaml
 - path: ../../default/manager_webhook_patch.yaml
+# Disable DSC controller for vanilla overlay (DSCI-only mode)
+- path: manager_env_patch.yaml
 
 # Replace OpenShift CA injection with cert-manager CA injection for CRDs
 - target:

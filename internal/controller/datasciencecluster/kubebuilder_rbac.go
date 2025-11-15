@@ -122,7 +122,7 @@ package datasciencecluster
 
 // +kubebuilder:rbac:groups="controller-runtime.sigs.k8s.io",resources=controllermanagerconfigs,verbs=get;create;patch;delete
 
-// +kubebuilder:rbac:groups="cert-manager.io",resources=certificates;issuers,verbs=create;patch
+// +kubebuilder:rbac:groups="cert-manager.io",resources=certificates;issuers;clusterissuers,verbs=create;patch;get;list;watch
 
 // +kubebuilder:rbac:groups="apps",resources=replicasets,verbs=*
 // +kubebuilder:rbac:groups="*",resources=replicasets,verbs=*

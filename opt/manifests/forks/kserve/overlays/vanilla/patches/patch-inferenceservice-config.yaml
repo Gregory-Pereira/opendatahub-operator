@@ -5,9 +5,9 @@ metadata:
   namespace: kserve
 data:
   explainers: "{}"
-  oauthProxy: |- 
+  oauthProxy: |-
     {
-      "image" : "kube-rbac-proxy_PLACEHOLDER",
+      "image" : "$(kube-rbac-proxy)",
       "memoryRequest": "64Mi",
       "memoryLimit": "128Mi",
       "cpuRequest": "100m",
@@ -15,7 +15,7 @@ data:
     }
   storageInitializer: |-
     {
-        "image" : "kserve-storage-initializer_PLACEHOLDER",
+        "image" : "$(kserve-storage-initializer)",
         "memoryRequest": "100Mi",
         "memoryLimit": "24Gi",
         "cpuRequest": "100m",
@@ -43,7 +43,7 @@ data:
     }
   logger: |-
     {
-        "image" : "kserve-agent_PLACEHOLDER",
+        "image" : "$(kserve-agent)",
         "memoryRequest": "100Mi",
         "memoryLimit": "1Gi",
         "cpuRequest": "100m",
@@ -52,7 +52,7 @@ data:
     }
   batcher: |-
     {
-        "image" : "kserve-agent_PLACEHOLDER",
+        "image" : "$(kserve-agent)",
         "memoryRequest": "1Gi",
         "memoryLimit": "1Gi",
         "cpuRequest": "1",
@@ -60,7 +60,7 @@ data:
     }
   agent: |-
     {
-        "image" : "kserve-agent_PLACEHOLDER",
+        "image" : "$(kserve-agent)",
         "memoryRequest": "100Mi",
         "memoryLimit": "1Gi",
         "cpuRequest": "100m",
@@ -68,7 +68,7 @@ data:
     }
   router: |-
     {
-        "image" : "kserve-router_PLACEHOLDER",
+        "image" : "$(kserve-router)",
         "memoryRequest": "100Mi",
         "memoryLimit": "1Gi",
         "cpuRequest": "100m",
