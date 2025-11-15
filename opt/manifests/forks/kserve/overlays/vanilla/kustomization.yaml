@@ -10,9 +10,10 @@ resources:
 - user-cluster-roles.yaml
 - addons
 
-namespace: kserve
+namespace: opendatahub
 
 patches:
+- path: patches/remove-namespace.yaml
 - path: patches/remove-clusterservingruntime.yaml
 #- path: patches/remove-cert-manager.yaml
 - path: patches/remove-local-model.yaml
@@ -90,6 +91,34 @@ replacements:
       fieldPaths:
         - spec.template.containers.[name=main].image
         - spec.worker.containers.[name=main].image
+- source:
+    kind: ConfigMap
+    name: kserve-parameters
+    fieldPath: data.kserve-namespace
+  targets:
+  - select:
+      kind: Certificate
+      name: serving-cert
+    fieldPaths:
+    - spec.commonName
+    - spec.dnsNames.0
+    options:
+      delimiter: '.'
+      index: 1
+  - select:
+      kind: ValidatingWebhookConfiguration
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 0
+  - select:
+      kind: MutatingWebhookConfiguration
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 0
 
 configMapGenerator:
 - envs:

@@ -9,3 +9,11 @@ varReference:
     kind: LLMInferenceServiceConfig
   - path: spec/template/initContainers/image
     kind: LLMInferenceServiceConfig
+  - path: spec/commonName
+    kind: Certificate
+  - path: spec/dnsNames
+    kind: Certificate
+  - path: metadata/annotations/cert-manager.io\/inject-ca-from
+    kind: ValidatingWebhookConfiguration
+  - path: metadata/annotations/cert-manager.io\/inject-ca-from
+    kind: MutatingWebhookConfiguration
