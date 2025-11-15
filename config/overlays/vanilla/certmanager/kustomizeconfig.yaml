@@ -1,0 +1,15 @@
+nameReference:
+- kind: Issuer
+  group: cert-manager.io
+  fieldSpecs:
+  - kind: Certificate
+    group: cert-manager.io
+    path: spec/issuerRef/name
+
+varReference:
+- path: metadata/annotations/cert-manager.io\/inject-ca-from
+  kind: MutatingWebhookConfiguration
+- path: metadata/annotations/cert-manager.io\/inject-ca-from
+  kind: ValidatingWebhookConfiguration
+- path: metadata/annotations/cert-manager.io\/inject-ca-from
+  kind: CustomResourceDefinition

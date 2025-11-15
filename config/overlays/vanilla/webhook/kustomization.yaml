@@ -1,0 +1,15 @@
+resources:
+- service.yaml
+- manifests.yaml
+
+# Remove OpenShift-specific annotations
+# commonAnnotations from base webhook are not inherited
+
+patches:
+- path: service_patch.yaml
+  target:
+    kind: Service
+    name: webhook-service
+
+configurations:
+- ../../../webhook/kustomizeconfig.yaml

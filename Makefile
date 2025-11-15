@@ -290,11 +290,11 @@ uninstall: prepare ## Uninstall CRDs from the K8s cluster specified in ~/.kube/c
 
 .PHONY: deploy
 deploy: prepare ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/default | kubectl apply --namespace $(OPERATOR_NAMESPACE) -f -
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/overlays/vanilla | kubectl apply --server-side --namespace $(OPERATOR_NAMESPACE) -f -
 
 .PHONY: undeploy
 undeploy: prepare ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/overlays/vanilla | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin

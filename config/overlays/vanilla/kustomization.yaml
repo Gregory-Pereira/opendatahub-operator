@@ -1,0 +1,157 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Configurable namespace
+namespace: opendatahub-operator-system
+
+# Name prefix for all resources
+namePrefix: opendatahub-operator-
+
+# Note: Use --load-restrictor LoadRestrictionsNone when building this overlay
+# Example: kubectl kustomize config/overlays/vanilla --load-restrictor LoadRestrictionsNone
+
+buildMetadata: [originAnnotations]
+
+# Disable name suffix hash for ConfigMaps
+generatorOptions:
+  disableNameSuffixHash: true
+
+# Set custom image for the manager
+images:
+- name: controller
+  newName: quay.io/lburgazzoli/opendatahub-operator
+  newTag: vanilla
+
+# Set replica count for the manager
+replicas:
+- name: controller-manager
+  count: 1
+
+resources:
+- ../../crd
+- ../../rbac
+- ../../manager
+- certmanager
+- webhook
+
+patches:
+# Add webhook and auth proxy patches to manager
+- path: ../../default/manager_auth_proxy_patch.yaml
+- path: ../../default/manager_webhook_patch.yaml
+
+# Replace OpenShift CA injection with cert-manager CA injection for CRDs
+- target:
+    group: apiextensions.k8s.io
+    version: v1
+    kind: CustomResourceDefinition
+    name: dscinitializations.dscinitialization.opendatahub.io
+  path: crd/patches/cainjection_dscinitialization.yaml
+- target:
+    group: apiextensions.k8s.io
+    version: v1
+    kind: CustomResourceDefinition
+    name: datascienceclusters.datasciencecluster.opendatahub.io
+  path: crd/patches/cainjection_datasciencecluster.yaml
+
+# Add cert-manager CA injection annotations to webhook configurations
+- target:
+    group: admissionregistration.k8s.io
+    version: v1
+    kind: MutatingWebhookConfiguration
+    name: mutating-webhook-configuration
+  path: webhook/cainjection_mutatingwebhook.yaml
+- target:
+    group: admissionregistration.k8s.io
+    version: v1
+    kind: ValidatingWebhookConfiguration
+    name: validating-webhook-configuration
+  path: webhook/cainjection_validatingwebhook.yaml
+
+# Note: Conversion webhooks are not included in this overlay
+# The base CRDs support both v1 and v2 APIs without conversion webhooks
+# Users should use v2 APIs directly
+
+# Configure cert-manager variable substitution for CA injection annotations
+# The CA bundle will be injected by cert-manager into the CRDs and webhook configurations
+replacements:
+- source:
+    kind: Certificate
+    group: cert-manager.io
+    version: v1
+    name: serving-cert
+    fieldPath: metadata.namespace
+  targets:
+  - select:
+      kind: CustomResourceDefinition
+      name: datascienceclusters.datasciencecluster.opendatahub.io
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 0
+  - select:
+      kind: CustomResourceDefinition
+      name: dscinitializations.dscinitialization.opendatahub.io
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 0
+  - select:
+      kind: MutatingWebhookConfiguration
+      name: mutating-webhook-configuration
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 0
+  - select:
+      kind: ValidatingWebhookConfiguration
+      name: validating-webhook-configuration
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 0
+- source:
+    kind: Certificate
+    group: cert-manager.io
+    version: v1
+    name: serving-cert
+    fieldPath: metadata.name
+  targets:
+  - select:
+      kind: CustomResourceDefinition
+      name: datascienceclusters.datasciencecluster.opendatahub.io
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 1
+  - select:
+      kind: CustomResourceDefinition
+      name: dscinitializations.dscinitialization.opendatahub.io
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 1
+  - select:
+      kind: MutatingWebhookConfiguration
+      name: mutating-webhook-configuration
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 1
+  - select:
+      kind: ValidatingWebhookConfiguration
+      name: validating-webhook-configuration
+    fieldPaths:
+    - metadata.annotations.[cert-manager.io/inject-ca-from]
+    options:
+      delimiter: '/'
+      index: 1
+
+configurations:
+- certmanager/kustomizeconfig.yaml
