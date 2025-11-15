@@ -140,7 +140,7 @@ func GetDSCI(ctx context.Context, cli client.Client) (*dsciv2.DSCInitialization,
 func ApplicationNamespace(ctx context.Context, cli client.Client) (string, error) {
 	ns := os.Getenv("ODH_APPLICATION_NAMESPACE")
 	if ns != "" {
-		return "", nil
+		return ns, nil
 	}
 
 	dsci, err := GetDSCI(ctx, cli)
