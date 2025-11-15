@@ -11,20 +11,20 @@ ARG OVERWRITE_MANIFESTS=""
 USER root
 WORKDIR /
 COPY opt/manifests/ /opt/manifests/
-COPY opt/manifests/forks /opt/manifests/kserve
 
 RUN rm -rf /opt/manifests/forks
 
-# Clean up unwanted directories and files from manifests
-RUN rm -rf /opt/manifests/*/e2e /opt/manifests/*/scorecard /opt/manifests/*/test /opt/manifests/*/samples /opt/manifests/*/example-* \
-    && find /opt/manifests -name "README.md" -delete
+RUN rm -rf /opt/manifests/kserve
+COPY opt/manifests/forks/kserve/ /opt/manifests/kserve
 
 # Copy monitoring config removing any possibly pre-existing symlinks
 RUN rm -f /opt/manifests/monitoring
 COPY config/monitoring/ /opt/manifests/monitoring
+
 # Copy ods-configs removing any possibly pre-existing symlinks
 RUN rm -f /opt/manifests/osd-configs
 COPY config/osd-configs/ /opt/manifests/osd-configs
+
 # Copy hardwareprofiles removing any possibly pre-existing symlinks
 RUN rm -f /opt/manifests/hardwareprofiles
 COPY config/hardwareprofiles/ /opt/manifests/hardwareprofiles

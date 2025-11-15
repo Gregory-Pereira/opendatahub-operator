@@ -19,7 +19,7 @@ Before starting, ensure you have the following installed:
 Create a Minikube cluster with sufficient resources:
 
 ```bash
-minikube start --driver=kvm2 --cpus=4 --memory=16g --disk-size=30g
+minikube start --driver=docker --cpus=4 --memory=16g --disk-size=30g
 ```
 
 **Resource Notes:**
