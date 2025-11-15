@@ -1,0 +1,27 @@
+resources:
+- dscinitialization.opendatahub.io_dscinitializations.yaml
+- datasciencecluster.opendatahub.io_datascienceclusters.yaml
+- features.opendatahub.io_featuretrackers.yaml
+- components.platform.opendatahub.io_dashboards.yaml
+- components.platform.opendatahub.io_workbenches.yaml
+- components.platform.opendatahub.io_modelcontrollers.yaml
+- components.platform.opendatahub.io_datasciencepipelines.yaml
+- components.platform.opendatahub.io_kserves.yaml
+- components.platform.opendatahub.io_kueues.yaml
+- components.platform.opendatahub.io_rays.yaml
+- components.platform.opendatahub.io_trustyais.yaml
+- components.platform.opendatahub.io_modelregistries.yaml
+- components.platform.opendatahub.io_trainingoperators.yaml
+- services.platform.opendatahub.io_monitorings.yaml
+- services.platform.opendatahub.io_auths.yaml
+- services.platform.opendatahub.io_gatewayconfigs.yaml
+- components.platform.opendatahub.io_feastoperators.yaml
+- components.platform.opendatahub.io_llamastackoperators.yaml
+- infrastructure.opendatahub.io_hardwareprofiles.yaml
+#+kubebuilder:scaffold:crdkustomizeresource
+
+labels:
+  - pairs:
+      "helm.sh/hook": pre-install,pre-upgrade
+      "helm.sh/hook-delete-policy": before-hook-creation
+      "helm.sh/resource-policy": keep

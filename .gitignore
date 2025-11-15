@@ -69,8 +69,8 @@ local.mk
 catalog/
 
 # Ignore generated files
-config/crd/bases
-config/crd/external
-config/rbac/role.yaml
-config/webhook/manifests.yaml
+#config/crd/bases
+#config/crd/external
+#config/rbac/role.yaml
+#config/webhook/manifests.yaml
 bundle/

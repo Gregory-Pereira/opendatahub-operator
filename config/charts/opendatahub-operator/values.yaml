@@ -1,0 +1,22 @@
+# Default values for opendatahub-operator
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Components configuration
+components:
+  # Application namespace for ODH components
+  namespace: opendatahub
+
+# Controller configuration
+controller:
+  # Replica count for the operator deployment
+  replicaCount: 1
+
+  # Resource limits and requests for the operator
+  resources:
+    limits:
+      cpu: 500m
+      memory: 4Gi
+    requests:
+      cpu: 100m
+      memory: 780Mi

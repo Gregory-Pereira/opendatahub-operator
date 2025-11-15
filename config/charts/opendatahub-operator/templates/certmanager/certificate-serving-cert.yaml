@@ -1,0 +1,14 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: opendatahub-operator-serving-cert
+  namespace: {{ .Release.Namespace }}
+spec:
+  dnsNames:
+  - opendatahub-operator-webhook-service.{{ .Release.Namespace }}.svc
+  - opendatahub-operator-webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: opendatahub-operator-selfsigned-issuer
+  secretName: opendatahub-operator-controller-webhook-cert

@@ -7,9 +7,9 @@ This guide provides step-by-step instructions for setting up a Minikube cluster 
 Before starting, ensure you have the following installed:
 
 - **Minikube** - Local Kubernetes cluster
-- **kubectl** 
+- **kubectl**
 - **Helm**
-- **istioctl** - Download from https://istio.io/latest/docs/setup/getting-started/
+- **istioctl 1.27.x** - Download from https://istio.io/latest/docs/setup/getting-started/
 - **System Resources** - At least 16GB RAM available on your machine
 
 ## Installation Steps
@@ -26,15 +26,7 @@ minikube start --driver=docker --cpus=4 --memory=16g --disk-size=30g
 - Minimum: 8GB RAM, 4 CPUs
 - Recommended: 16GB RAM, 4 CPUs for stability with all components
 
-### 2. Enable Metrics Server (Optional but Recommended)
-
-```bash
-minikube addons enable metrics-server
-```
-
-This enables resource metrics for monitoring and HPA (Horizontal Pod Autoscaling).
-
-### 3. Install Kubernetes Gateway API CRDs
+### 2. Install Kubernetes Gateway API CRDs
 
 **CRITICAL: Install Gateway API CRDs before Istio**
 
@@ -54,12 +46,7 @@ Expected output should include:
 - `grpcroutes.gateway.networking.k8s.io`
 - And other Gateway API CRDs
 
-**Alternative: Experimental Channel** (includes experimental features):
-```bash
-kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.0/experimental-install.yaml
-```
-
-### 4. Install cert-manager
+### 3. Install cert-manager
 
 cert-manager manages TLS certificates and can integrate with Istio for both gateway and mesh certificates.
 
@@ -77,9 +64,7 @@ kubectl get pods -n cert-manager
 
 All pods should be in `Running` state.
 
-### 5. Install Prometheus (kube-prometheus-stack)
-
-The kube-prometheus-stack includes Prometheus, Grafana, AlertManager, and the Prometheus Operator.
+### 4. Install Prometheus (kube-prometheus-stack)
 
 ```bash
 # Install kube-prometheus-stack (minimal installation) using OCI registry
@@ -95,15 +80,7 @@ helm install prometheus \
 kubectl get pods -n monitoring
 ```
 
-This provides:
-- Prometheus Operator
-- Prometheus instance with pre-configured rules
-- AlertManager
-- ServiceMonitor and PodMonitor CRDs for service discovery
-
-**Note:** This minimal installation disables kube-state-metrics, node-exporter, and Grafana to reduce resource usage. If you need these components, remove the corresponding `--set` flags.
-
-### 6. Install Istio with Minimal Profile
+### 5. Install Istio with Minimal Profile
 
 When using Gateway API, use the minimal profile since Gateway API auto-provisions gateway deployments.
 
@@ -118,16 +95,7 @@ kubectl get pods -n istio-system
 
 **Why minimal profile?** Gateway API resources automatically provision gateway deployments, so you don't need the default `istio-ingressgateway`.
 
-### 7. Create Gateway Namespace with Sidecar Injection
-
-```bash
-kubectl create namespace istio-ingress
-kubectl label namespace istio-ingress istio-injection=enabled
-```
-
-This namespace will host your Gateway resources and their auto-provisioned deployments.
-
-### 8. Start Minikube Tunnel
+### 6. Start Minikube Tunnel
 
 **Required for LoadBalancer Support**
 
@@ -141,29 +109,108 @@ This enables LoadBalancer services to get external IPs in Minikube. Without this
 
 **Note:** This requires administrative privileges on your machine.
 
-## Verification Steps
+### 7. Install OpenDataHub Operator
 
-Verify each component is installed correctly:
+Install the OpenDataHub operator using the Helm chart from OCI registry:
 
 ```bash
-# Verify Gateway API CRDs
-kubectl get crd | grep gateway.networking.k8s.io
+helm install opendatahub-operator \
+  oci://quay.io/lburgazzoli/opendatahub-operator-chart:0.1.0 \
+  --namespace opendatahub-system \
+  --create-namespace
 
-# Verify cert-manager
-kubectl get pods -n cert-manager
-# Expected: 3 pods running (controller, webhook, cainjector)
+# Verify installation
+kubectl get pods -n opendatahub-system
+```
 
-# Verify Prometheus
-kubectl get pods -n monitoring
-# Expected: Multiple pods including prometheus, grafana, alertmanager
+Wait for the operator pod to be in `Running` state before proceeding.
 
-# Verify Istio
-kubectl get pods -n istio-system
-# Expected: istiod pod running
+### 8. Deploy KServe Component
 
-# Verify gateway namespace
-kubectl get namespace istio-ingress -o yaml
-# Should have label: istio-injection: enabled
+Create the KServe component:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: components.platform.opendatahub.io/v1alpha1
+kind: Kserve
+metadata:
+  name: default-kserve
+spec:
+  nim:
+    managementState: Removed
+EOF
+
+# Verify KServe resource
+kubectl get kserve
+```
+
+### 9. Deploy CPU-based LLM Example
+
+Deploy a sample LLM inference service running on CPU:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: serving.kserve.io/v1alpha1
+kind: LLMInferenceService
+metadata:
+  name: facebook-opt-125m-single
+  annotations:
+    security.opendatahub.io/enable-auth: "false"
+spec:
+  model:
+    uri: hf://facebook/opt-125m
+    name: facebook/opt-125m
+  replicas: 1
+  router:
+    scheduler: { }
+    route: { }
+    gateway: {}
+  template:
+    containers:
+      - name: main
+        image: quay.io/pierdipi/vllm-cpu:latest
+        securityContext:
+          runAsNonRoot: false
+        env:
+          - name: VLLM_LOGGING_LEVEL
+            value: DEBUG
+        resources:
+          limits:
+            cpu: '1'
+            memory: 10Gi
+          requests:
+            cpu: '100m'
+            memory: 8Gi
+        livenessProbe:
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 30
+          failureThreshold: 5
+EOF
+
+# Verify deployment
+kubectl get llminferenceservice
+kubectl get pods
+```
+
+This deploys the Facebook OPT-125M model using vLLM on CPU.
+
+**Test the LLM inference service:**
+
+Wait for the service to be ready, then test it with a completion request:
+
+```bash
+# Extract the service URL from the LLMInferenceService status
+URL=$(kubectl get llminferenceservice facebook-opt-125m-single -o jsonpath='{.status.addresses[0].url}')
+echo "Service URL: $URL"
+
+# Test the service with a completion request
+curl -v ${URL}/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "facebook/opt-125m",
+    "prompt": "San Francisco is a"
+  }'
 ```
 
 ## Installation Order Summary
@@ -171,12 +218,14 @@ kubectl get namespace istio-ingress -o yaml
 The correct installation order is critical:
 
 1. **Minikube cluster** - Start cluster with sufficient resources
-2. **Metrics Server** - Optional but recommended
-3. **Gateway API CRDs** - Must be installed before Istio
-4. **cert-manager** - No dependencies
-5. **Prometheus** - No dependencies
-6. **Istio** - Requires Gateway API CRDs
-7. **Minikube tunnel** - Start after Istio for LoadBalancer support
+2. **Gateway API CRDs** - Must be installed before Istio
+3. **cert-manager** - No dependencies
+4. **Prometheus** - No dependencies
+5. **Istio** - Requires Gateway API CRDs
+6. **Minikube tunnel** - Start after Istio for LoadBalancer support
+7. **OpenDataHub Operator** - Install via Helm chart
+8. **KServe Component** - Deploy after operator is running
+9. **LLM Example** - Deploy sample inference service
 
 ## Additional Resources
 
@@ -185,50 +234,3 @@ The correct installation order is critical:
 - [cert-manager Documentation](https://cert-manager.io/docs/)
 - [kube-prometheus-stack Chart](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack)
 - [Minikube Documentation](https://minikube.sigs.k8s.io/docs/)
-
-## Quick Start Script
-
-Here's a complete setup script for reference:
-
-```bash
-#!/bin/bash
-set -e
-
-echo "Starting Minikube..."
-minikube start --cpus=4 --memory=16g --disk-size=30g --driver=docker --kubernetes-version=v1.26.1
-
-echo "Enabling metrics-server..."
-minikube addons enable metrics-server
-
-echo "Installing Gateway API CRDs..."
-kubectl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.4.0" | kubectl apply -f -
-
-echo "Installing cert-manager..."
-helm install cert-manager \
-  oci://quay.io/jetstack/charts/cert-manager \
-  --version v1.19.1 \
-  --namespace cert-manager \
-  --create-namespace \
-  --set crds.enabled=true
-
-echo "Installing Prometheus..."
-helm install prom \
-  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
-  --namespace monitoring \
-  --create-namespace \
-  --set kubeStateMetrics.enabled=false \
-  --set nodeExporter.enabled=false \
-  --set grafana.enabled=false
-
-echo "Installing Istio..."
-istioctl install --set profile=minimal -y
-
-echo "Creating gateway namespace..."
-kubectl create namespace istio-ingress
-kubectl label namespace istio-ingress istio-injection=enabled
-
-echo "Setup complete!"
-echo "Run 'minikube tunnel' in a separate terminal to enable LoadBalancer support"
-```
-
-Save this as `setup-minikube.sh` and run with `bash setup-minikube.sh`.

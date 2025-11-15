@@ -10,8 +10,6 @@ namePrefix: opendatahub-operator-
 # Note: Use --load-restrictor LoadRestrictionsNone when building this overlay
 # Example: kubectl kustomize config/overlays/vanilla --load-restrictor LoadRestrictionsNone
 
-buildMetadata: [originAnnotations]
-
 # Disable name suffix hash for ConfigMaps
 generatorOptions:
   disableNameSuffixHash: true

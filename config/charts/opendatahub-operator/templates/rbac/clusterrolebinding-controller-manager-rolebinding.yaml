@@ -1,0 +1,13 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opendatahub-operator-controller-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opendatahub-operator-controller-manager-role
+subjects:
+- kind: ServiceAccount
+  name: opendatahub-operator-controller-manager
+  namespace: {{ .Release.Namespace }}

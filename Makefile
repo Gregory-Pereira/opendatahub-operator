@@ -30,6 +30,8 @@ ifeq ($(BUNDLE_IMG), )
 endif
 
 IMAGE_BUILDER ?= podman
+# Helm chart OCI repository (defaults to quay.io/opendatahub/opendatahub-operator-chart)
+ODH_HELM_REPO ?= quay.io/opendatahub/opendatahub-operator-chart
 # Specifies the namespace where the operator pods are deployed (defaults to opendatahub-operator-system)
 OPERATOR_NAMESPACE ?= opendatahub-operator-system
 # Specifies the namespace where the component deployments are deployed (defaults to opendatahub)
@@ -295,6 +297,23 @@ deploy: prepare ## Deploy controller to the K8s cluster specified in ~/.kube/con
 .PHONY: undeploy
 undeploy: prepare ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build --load-restrictor LoadRestrictionsNone config/overlays/vanilla | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+
+##@ Helm
+
+.PHONY: helm-package
+helm-package: ## Package and push the Helm chart to OCI registry
+	@TMPDIR=$$(mktemp -d -t helm-chart.XXXXXX) && \
+	helm package config/charts/opendatahub-operator -d $$TMPDIR && \
+	helm push $$TMPDIR/opendatahub-operator-chart-*.tgz oci://$(ODH_HELM_REPO) && \
+	rm -rf $$TMPDIR
+
+.PHONY: helm-install
+helm-install: ## Install the Helm chart locally
+	helm install opendatahub-operator config/charts/opendatahub-operator --namespace $(OPERATOR_NAMESPACE) --create-namespace
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the Helm chart
+	helm uninstall opendatahub-operator --namespace $(OPERATOR_NAMESPACE)
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/bin
