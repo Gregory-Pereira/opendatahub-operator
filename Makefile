@@ -32,6 +32,8 @@ endif
 IMAGE_BUILDER ?= podman
 # Helm chart OCI repository (defaults to quay.io/opendatahub/opendatahub-operator-chart)
 ODH_HELM_REPO ?= quay.io/opendatahub/opendatahub-operator-chart
+# Helm chart version (defaults to VERSION)
+ODH_HELM_VERSION ?= $(VERSION)
 # Specifies the namespace where the operator pods are deployed (defaults to opendatahub-operator-system)
 OPERATOR_NAMESPACE ?= opendatahub-operator-system
 # Specifies the namespace where the component deployments are deployed (defaults to opendatahub)
@@ -303,7 +305,7 @@ undeploy: prepare ## Undeploy controller from the K8s cluster specified in ~/.ku
 .PHONY: helm-package
 helm-package: ## Package and push the Helm chart to OCI registry
 	@TMPDIR=$$(mktemp -d -t helm-chart.XXXXXX) && \
-	helm package config/charts/opendatahub-operator -d $$TMPDIR && \
+	helm package config/charts/opendatahub-operator --version $(ODH_HELM_VERSION) --app-version $(VERSION) -d $$TMPDIR && \
 	helm push $$TMPDIR/opendatahub-operator-chart-*.tgz oci://$(ODH_HELM_REPO) && \
 	rm -rf $$TMPDIR
 
