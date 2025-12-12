@@ -451,6 +451,12 @@ var (
 		Kind:    "InferenceModel",
 	}
 
+	InferencePoolV1 = schema.GroupVersionKind{
+		Group:   "inference.networking.k8s.io",
+		Version: "v1",
+		Kind:    "InferencePool",
+	}
+
 	OperatorCondition = schema.GroupVersionKind{
 		Group:   "operators.coreos.com",
 		Version: "v2",
