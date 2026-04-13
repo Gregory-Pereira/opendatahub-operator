@@ -151,9 +151,9 @@ metrics for scaling decisions. These resources set up bearer token auth:
 Apply the YAML resources:
 
 ```bash
-oc apply -f docs/install/wva/07-auth/07-service-account.yaml
-oc apply -f docs/install/wva/07-auth/08-cluster-role-binding.yaml
-oc apply -f docs/install/wva/07-auth/09-trigger-authentication.yaml
+oc apply -f docs/install/wva/07-auth/07a-service-account.yaml
+oc apply -f docs/install/wva/07-auth/07b-cluster-role-binding.yaml
+oc apply -f docs/install/wva/07-auth/07c-trigger-authentication.yaml
 ```
 
 Then patch the `inferenceservice-config` configmap so the llmisvc controller
