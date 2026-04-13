@@ -22,7 +22,7 @@ You can enable intelligent autoscaling for your llm-d model deployments by confi
 
 - You have installed the `Red Hat Connectivity Link` operator from OperatorHub. For more information on how to do this, refer to the [Red Hat official documentation](https://docs.redhat.com/en/documentation/red_hat_connectivity_link/1.3/html/installing_on_openshift_container_platform/index) on installing it.
 
-- You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later.
+- You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later. (Note: OpenShift clusters version `4.20` created by ClusterBot don't have this operator installed by default)
 
 - You have installed {productname-long} {vernum}.
 
