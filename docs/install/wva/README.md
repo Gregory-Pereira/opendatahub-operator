@@ -55,22 +55,6 @@ Wait for the operator to be ready:
 oc get csv -n openshift-operators | grep connectivity
 ```
 
-### Step 3 — Create KedaController
-
-Creates the `KedaController` CR which tells the KEDA operator to deploy the
-actual KEDA components (keda-operator, keda-metrics-apiserver,
-keda-admission). Without this, `ScaledObject` resources are ignored.
-
-```bash
-oc apply -f docs/install/wva/03-keda-controller.yaml
-```
-
-Wait for all KEDA pods to be running:
-
-```bash
-oc get pods -n openshift-keda -w
-```
-
 ### Step 4 — Deploy and Patch ODH Operator
 
 Deploys the ODH operator and patches the controller-manager ServiceAccount with
