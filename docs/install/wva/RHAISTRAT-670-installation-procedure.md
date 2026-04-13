@@ -24,6 +24,8 @@ You can enable intelligent autoscaling for your llm-d model deployments by confi
 
 - You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later. (Note: OpenShift clusters version `4.20` created by ClusterBot don't have this operator installed by default)
 
+- (Optional if plan to use LeaderWorkerSet) You have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator`.
+
 - You have installed {productname-long} {vernum}.
 
 - A `DataScienceClusterInitialization` (DSCI) and `DataScienceCluster` (DSC) exist in your cluster, enabling the `workload-variant-autoscaler-controller-manager`, `llmisvc-controller-manager` and `kserve-controller-manager`. The `DataScienceClusterInitialization` gets created by the Red Hat OpenShift-AI operator out of the box for you. This is an sample exerpt from the `DataScienceCluster` manifest that enables the WVA controller:
