@@ -52,7 +52,7 @@ oc apply -f docs/install/wva/02-connectivity-link.yaml
 Wait for the operator to be ready:
 
 ```bash
-oc get csv -n openshift-operators | grep connectivity
+oc get csv -n openshift-operators | grep Connectivity
 ```
 
 ### Step 4 — Deploy and Patch ODH Operator
