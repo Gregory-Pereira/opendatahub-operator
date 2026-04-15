@@ -7,7 +7,6 @@ echo "Applying DSC..."
 kubectl apply -f "$DIR/05a-wva-dsc.yaml"
 
 CONTROLLER_NS=redhat-ods-applications
-CONTROLLER_NS=opendatahub # with quay.io/rhoai/odh-rhel9-operator:rhoai-3.4
 
 oc create secret docker-registry rhoai-operator-pull-secret -n $CONTROLLER_NS \
     --from-file=.dockerconfigjson=$HOME/.docker/config.json \
