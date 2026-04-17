@@ -1,6 +1,6 @@
 # Enable the Workload Variant Autoscaler (WVA) for llm-d deployments
 
-You can enable intelligent autoscaling for your llm-d model deployments by configuring the workload variant autoscaler (WVA). The WVA controller is automatically deployed when the {productname-short} Operator is installed. After you configure autoscaling in the LLMInferenceService custom resource, the WVA automatically adjusts the replica count of your model server based on real-time inference traffic and AI accelerator capacity.
+You can enable intelligent autoscaling for your llm-d model deployments by configuring the workload variant autoscaler (WVA). The WVA controller is automatically deployed when the {productname-short} Operator is installed. After you configure autoscaling in the LLMInferenceService custom resource, the WVA automatically adjusts the replica count of your model server based on real-time inference traffic and AI accelerator capacity. The example below shows how to enable WVA for LLMInferenceService by configuring the `scaling` section in the resource. You can disable WVA for LLMInferenceService by not configuring `scaling` section.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ You can enable intelligent autoscaling for your llm-d model deployments by confi
 
 - You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later. (Note: OpenShift clusters version `4.20` created by ClusterBot don't have this operator installed by default)
 
-- (Optional if plan to use LeaderWorkerSet) You have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator`.
+- If you plan to use Wide Expert Parallelism with LeaderWorkerSet, you will also have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator`.
 
 - You have installed {productname-long} {vernum}.
 
