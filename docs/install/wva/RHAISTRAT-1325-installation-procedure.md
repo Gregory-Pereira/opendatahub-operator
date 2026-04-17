@@ -373,63 +373,6 @@ NAME                                    SCALETARGETKIND      SCALETARGETNAME    
 autoscaling-example-llama-kserve-keda   apps/v1.Deployment   autoscaling-example-llama-kserve   1     5     True    True     False      False    prometheus   ai-inference-keda-thanos   119s
 ```
 
-#### Metric relabelling mapping
-
-By default vLLM exposes metrics to the `vllm` namespace, but in Red Hat OpenShift AI (RHOAI), we re-map these to the `kserve_vllm` namespace. This means the Workload Variant Autoscaler will only be looking for the kserve namespace instances of these metrics. To enable the WVA to pick up these metrics we create a `PrometheusRule` responsible for creating aliases for them. You will need to create the following manifest:
-
-```bash
-oc apply -f - <<'EOF'
-apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: vllm-metrics-alias
-  namespace: autoscaling-example
-  labels:
-    monitoring.opendatahub.io/scrape: "true"
-spec:
-  groups:
-  - name: vllm-metric-aliases
-    interval: 15s
-    rules:
-    - record: vllm:kv_cache_usage_perc
-      expr: kserve_vllm:kv_cache_usage_perc
-    - record: vllm:num_requests_waiting
-      expr: kserve_vllm:num_requests_waiting
-    - record: vllm:num_requests_running
-      expr: kserve_vllm:num_requests_running
-    - record: vllm:cache_config_info
-      expr: kserve_vllm:cache_config_info
-    - record: vllm:request_success_total
-      expr: kserve_vllm:request_success_total
-    - record: vllm:request_generation_tokens_sum
-      expr: kserve_vllm:request_generation_tokens_sum
-    - record: vllm:request_generation_tokens_count
-      expr: kserve_vllm:request_generation_tokens_count
-    - record: vllm:request_prompt_tokens_sum
-      expr: kserve_vllm:request_prompt_tokens_sum
-    - record: vllm:request_prompt_tokens_count
-      expr: kserve_vllm:request_prompt_tokens_count
-    - record: vllm:time_to_first_token_seconds_sum
-      expr: kserve_vllm:time_to_first_token_seconds_sum
-    - record: vllm:time_to_first_token_seconds_count
-      expr: kserve_vllm:time_to_first_token_seconds_count
-    - record: vllm:time_per_output_token_seconds_sum
-      expr: kserve_vllm:time_per_output_token_seconds_sum
-    - record: vllm:time_per_output_token_seconds_count
-      expr: kserve_vllm:time_per_output_token_seconds_count
-    - record: vllm:prefix_cache_hits
-      expr: kserve_vllm:prefix_cache_hits
-    - record: vllm:prefix_cache_queries
-      expr: kserve_vllm:prefix_cache_queries
-EOF
-```
-
-If everything goes right, you should receive confirmation that your `PrometheusRule` has been created:
-
-```console
-prometheusrule.monitoring.coreos.com/vllm-metrics-alias created
-```
-
 ## Verifying the Autoscaling Behaviour
 
 Breaking the verification of Autoscaling down into three separate steps helps to ensure our functionality while providing useful guards for debugging in case something has gone wrong. Lets examine if our system can do the following:
