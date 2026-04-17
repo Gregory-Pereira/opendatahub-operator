@@ -24,7 +24,7 @@ You can enable intelligent autoscaling for your llm-d model deployments by confi
 
 - You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later. (Note: OpenShift clusters version `4.20` created by ClusterBot don't have this operator installed by default)
 
-- If you plan to use Wide Expert Parallelism with LeaderWorkerSet, you will also have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator`.
+- If you plan to use Wide Expert Parallelism with LeaderWorkerSet, you will also have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator` for the `LeaderWorkerSet` CRD to be created.
 
 - You have installed {productname-long} {vernum}.
 
@@ -282,7 +282,7 @@ oc apply -f - <<'EOF'
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
-  name: autoscaling-example-llama
+  name: autoscaling-example-qwen
   namespace: autoscaling-example
   annotations:
     prometheus.io/scrape: "true"
@@ -342,7 +342,7 @@ EOF
 
 Upon successful creation of our LLMISVC we should see the following:
 ```console
-llminferenceservice.serving.kserve.io/autoscaling-example-llama created
+llminferenceservice.serving.kserve.io/autoscaling-example-qwen created
 ```
 
 Some important pieces to note about this:
@@ -366,11 +366,11 @@ env:
 ```bash
 oc get llmisvc -n autoscaling-example
 NAME                        URL   READY   REASON   AGE
-autoscaling-example-llama         True             102s
+autoscaling-example-qwen         True             102s
 
 oc get scaledobject -n autoscaling-example
 NAME                                    SCALETARGETKIND      SCALETARGETNAME                    MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED   TRIGGERS     AUTHENTICATIONS            AGE
-autoscaling-example-llama-kserve-keda   apps/v1.Deployment   autoscaling-example-llama-kserve   1     5     True    True     False      False    prometheus   ai-inference-keda-thanos   119s
+autoscaling-example-qwen-kserve-keda   apps/v1.Deployment   autoscaling-example-qwen-kserve   1     5     True    True     False      False    prometheus   ai-inference-keda-thanos   119s
 ```
 
 ## Verifying the Autoscaling Behaviour
@@ -407,11 +407,11 @@ You should see three separate JSON payloads for each:
     "instance": "10.130.3.118:8000",
     "job": "autoscaling-example/kserve-llm-isvc-vllm-engine",
     "llm_isvc_component": "workload",
-    "llm_isvc_name": "autoscaling-example-llama",
+    "llm_isvc_name": "autoscaling-example-qwen",
     "llm_isvc_role": "both",
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
     "namespace": "autoscaling-example",
-    "pod": "autoscaling-example-llama-kserve-56b64d69d-b297x",
+    "pod": "autoscaling-example-qwen-kserve-56b64d69d-b297x",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload"
   },
   "value": [
@@ -428,11 +428,11 @@ You should see three separate JSON payloads for each:
     "instance": "10.130.3.118:8000",
     "job": "autoscaling-example/kserve-llm-isvc-vllm-engine",
     "llm_isvc_component": "workload",
-    "llm_isvc_name": "autoscaling-example-llama",
+    "llm_isvc_name": "autoscaling-example-qwen",
     "llm_isvc_role": "both",
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
     "namespace": "autoscaling-example",
-    "pod": "autoscaling-example-llama-kserve-56b64d69d-b297x",
+    "pod": "autoscaling-example-qwen-kserve-56b64d69d-b297x",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload"
   },
   "value": [
@@ -449,11 +449,11 @@ You should see three separate JSON payloads for each:
     "instance": "10.130.3.118:8000",
     "job": "autoscaling-example/kserve-llm-isvc-vllm-engine",
     "llm_isvc_component": "workload",
-    "llm_isvc_name": "autoscaling-example-llama",
+    "llm_isvc_name": "autoscaling-example-qwen",
     "llm_isvc_role": "both",
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
     "namespace": "autoscaling-example",
-    "pod": "autoscaling-example-llama-kserve-56b64d69d-b297x",
+    "pod": "autoscaling-example-qwen-kserve-56b64d69d-b297x",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload"
   },
   "value": [
@@ -495,7 +495,7 @@ You should see the following:
     "pod": "workload-variant-autoscaler-controller-manager-774bc99447-x8l8d",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload",
     "service": "workload-variant-autoscaler-controller-manager-metrics-service",
-    "variant_name": "autoscaling-example-llama-kserve-va"
+    "variant_name": "autoscaling-example-qwen-kserve-va"
   },
   "value": [
     1775002469.694,
@@ -514,7 +514,7 @@ You should see the following:
     "pod": "workload-variant-autoscaler-controller-manager-774bc99447-x8l8d",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload",
     "service": "workload-variant-autoscaler-controller-manager-metrics-service",
-    "variant_name": "autoscaling-example-llama-kserve-va"
+    "variant_name": "autoscaling-example-qwen-kserve-va"
   },
   "value": [
     1775002470.133,
@@ -533,7 +533,7 @@ You should see the following:
     "pod": "workload-variant-autoscaler-controller-manager-774bc99447-x8l8d",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload",
     "service": "workload-variant-autoscaler-controller-manager-metrics-service",
-    "variant_name": "autoscaling-example-llama-kserve-va"
+    "variant_name": "autoscaling-example-qwen-kserve-va"
   },
   "value": [
     1775002470.557,
@@ -545,13 +545,13 @@ You should see the following:
 At this point you should have the following resources that got created from your `LLMISVC`:
 
 ```bash
-k get va autoscaling-example-llama-kserve-va
+k get va autoscaling-example-qwen-kserve-va
 NAME                                  TARGET                             MODEL                      OPTIMIZED   METRICSREADY   AGE
-autoscaling-example-llama-kserve-va   autoscaling-example-llama-kserve   Qwen/Qwen2.5-7B-Instruct   1           True           81m
+autoscaling-example-qwen-kserve-va   autoscaling-example-qwen-kserve   Qwen/Qwen2.5-7B-Instruct   1           True           81m
 
 k get scaledObject -n autoscaling-example
 NAME                                    SCALETARGETKIND      SCALETARGETNAME                    MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED   TRIGGERS     AUTHENTICATIONS            AGE
-autoscaling-example-llama-kserve-keda   apps/v1.Deployment   autoscaling-example-llama-kserve   1     5     True    True     Unknown    False    prometheus   ai-inference-keda-thanos   83m
+autoscaling-example-qwen-kserve-keda   apps/v1.Deployment   autoscaling-example-qwen-kserve   1     5     True    True     Unknown    False    prometheus   ai-inference-keda-thanos   83m
 ```
 
 It should be noted for your `VariantAutoscaling` it should show `METRICSREADY=True` and your scaledObject should be showing as `READY=true`. Once the WVA controller starts reconciling the `scaledObject` it should also become `ACTIVE=True`. If you are not seeing that, your first deubgging steps should be to `describe` these resources and check their `Status` sections of their yaml.
@@ -572,7 +572,7 @@ This is the fun part; we get to watch our inference workers scale before our ver
 set -euo pipefail
 
 NS="${1:-autoscaling-example}"
-ISVC="${2:-autoscaling-example-llama}"
+ISVC="${2:-autoscaling-example-qwen}"
 CONCURRENCY="${3:-200}"
 REQUESTS="${4:-5000}"
 POD_NAME="load-test-$(date +%s)"
@@ -709,7 +709,7 @@ The following is some sample output from the benchmarking script:
 
 ```console
 === WVA Autoscaling Test ===
-URL:         https://autoscaling-example-gateway-data-science-gateway-class.autoscaling-example.svc.cluster.local/autoscaling-example/autoscaling-example-llama/v1/chat/completions
+URL:         https://autoscaling-example-gateway-data-science-gateway-class.autoscaling-example.svc.cluster.local/autoscaling-example/autoscaling-example-qwen/v1/chat/completions
 Concurrency: 200
 Requests:    5000
 
@@ -766,10 +766,10 @@ During the load you might see:
 ```console
 NAME                                                              READY   STATUS    RESTARTS      AGE
 autoscaling-example-gateway-data-science-gateway-class-66c4qvpb   1/1     Running   0             81m
-autoscaling-example-llama-kserve-56b64d69d-b297x                  1/1     Running   0             106m
-autoscaling-example-llama-kserve-56b64d69d-kvvmc                  1/1     Running   0             10m
-autoscaling-example-llama-kserve-56b64d69d-m78nz                  1/1     Running   0             7m1s
-autoscaling-example-llama-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
+autoscaling-example-qwen-kserve-56b64d69d-b297x                  1/1     Running   0             106m
+autoscaling-example-qwen-kserve-56b64d69d-kvvmc                  1/1     Running   0             10m
+autoscaling-example-qwen-kserve-56b64d69d-m78nz                  1/1     Running   0             7m1s
+autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
 load-test-1775003391                                              1/1     Running   0             10m
 ```
 
@@ -778,7 +778,7 @@ And after it should scale back to :
 ```console
 NAME                                                              READY   STATUS    RESTARTS      AGE
 autoscaling-example-gateway-data-science-gateway-class-66c4qvpb   1/1     Running   0             81m
-autoscaling-example-llama-kserve-56b64d69d-b297x                  1/1     Running   0             106m
-autoscaling-example-llama-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
+autoscaling-example-qwen-kserve-56b64d69d-b297x                  1/1     Running   0             106m
+autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
 load-test-1775003391                                              1/1     Running   0             10m
 ```
