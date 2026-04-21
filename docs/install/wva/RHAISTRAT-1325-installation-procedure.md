@@ -463,8 +463,23 @@ You should see three separate JSON payloads for each:
 }
 ```
 
+### Verify Inference Scheduler Metrics From Prometheus
 **NOTE:** Currently the WVA does not currently use metrics from the inference scheduler but this is coming soon.
 
+The metrics were looking for are `inference_extension_flow_control_queue_size`, `inference_extension_flow_control_queue_size`, and `wva_desired_ratio`. We can grab those with the following
+
+```bash
+TOKEN=$(oc whoami -t)
+THANOS=$(oc get route thanos-querier -n OpenShift-monitoring -o jsonpath='{.spec.host}')
+for m in inference_extension_flow_control_queue_size inference_extension_flow_control_queue_size; do
+  curl -sk -G -H "Authorization: Bearer $TOKEN" "https://$THANOS/api/v1/query" \
+    --data-urlencode "query=${m}{exported_namespace=\"autoscaling-example\"}" \
+    | jq '.data.result[0]'
+done
+```
+You should see the following:
+```
+```
 
 ### Verify WVA is emitting metrics back to Prometheus
 

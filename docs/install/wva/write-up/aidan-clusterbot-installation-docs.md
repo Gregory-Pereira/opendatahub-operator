@@ -21,8 +21,9 @@ Everything should work with the standup script, but in case anything gets stuck 
 4. If testing on clusterbot, you have to run 06-scale-down-non-essential.sh. This will free up space on the cluster so that you can deploy everything else in the demo. Ignore this if you are testing on a real cluster.
 5. Run the 07-auth/apply.sh script to create the authentication and authorization for KEDA to see stuff from OpenShift monitoring. Customers will have to do this for DP, documented in the procedure docs
 6. Run the 08-llmisvc/apply.sh. Creates the LLMISVC, gateway, and namespace. It will also create recording rules account for the inference-sim image we have in that demo to map `vllm` --> `kserve_vllm` metrics, the latter of which is what WVA will operate on. This is basically a unique workaround for CPU only clusters, any official RHAIIS image will not have to do this
-7. Run the verification scripts. We have 3 separate ones:
+7. Run the verification scripts. We have 4 separate ones:
     - 09-verification/09a-check-inference-metrics.sh - checks if `kserve_vllm:` metrics show up in prometheus
+    - 09-verification/09a-check-inference-ext-metrics.sh - checks if `inference_extension:` metrics show up in prometheus
     - 09-verification/09b-check-wva-metrics.sh - checks if the WVA is emitting metrics to prometheus
     - 09-verification/09c-test-autoscaling.sh - this test attempts to produce a scaling event    
 
