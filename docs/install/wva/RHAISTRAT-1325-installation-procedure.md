@@ -312,7 +312,7 @@ spec:
   template:
     containers:
       - name: main
-        image: quay.io/aipcc/rhaiis/cuda-ubi9:3.4.0-ea.2 # If using Accelerators, use the corresponding inference-image
+        image: quay.io/aipcc/rhaiis/cuda-ubi9:3.4.0 # If using Accelerators, use the corresponding inference-image
         resources:
           limits:
             cpu: '4'

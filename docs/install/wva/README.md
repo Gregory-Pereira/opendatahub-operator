@@ -147,7 +147,7 @@ reference:
 ```bash
 kubectl patch configmap inferenceservice-config -n opendatahub \
   --type='json' \
-  --patch-file=docs/install/wva/07-auth/10-inferenceservice-config-patch.json
+  --patch-file=docs/install/wva/07-auth/inferenceservice-config-patch.json
 ```
 
 Restart the llmisvc controller to pick up the config change:
