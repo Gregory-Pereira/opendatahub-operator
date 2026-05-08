@@ -24,7 +24,7 @@ You can enable intelligent autoscaling for your llm-d model deployments by confi
 
 - You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later. (Note: OpenShift clusters version `4.20` created by ClusterBot don't have this operator installed by default)
 
-- If you plan to use Wide Expert Parallelism with LeaderWorkerSet, you will also have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator` for the `LeaderWorkerSet` CRD to be created.
+- If you plan to use Wide Expert Parallelism with LeaderWorkerSet (LWS), you will also have to install LWS. For more information on how to do this, refer to the [Installing LWS to a Kubernetes Cluster](https://lws.sigs.k8s.io/docs/installation/) on installing it.
 
 - You have installed {productname-long} {vernum}.
 
@@ -823,4 +823,28 @@ autoscaling-example-gateway-data-science-gateway-class-66c4qvpb   1/1     Runnin
 autoscaling-example-qwen-kserve-56b64d69d-b297x                  1/1     Running   0             106m
 autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
 load-test-1775003391                                              1/1     Running   0             10m
+```
+
+## Wide Expert Parallelism with LeaderWorkerSet (LWS)
+[TODO] Objects are created but still working on getting models running on GPUs thus there are `False` status still.
+
+`08c-llmisvc-lws-deepseek-lite.yaml` contains a sample `LLMInferenceService` with LWS.
+
+### Verify LLMISVC, LWS, ScaledObject
+```bash
+oc get llmisvc -n autoscaling-example
+NAME                URL                                                                                                                          READY   REASON        AGE
+deepseek-coder-v2   https://openshift-ai-inference-openshift-default.openshift-ingress.svc.cluster.local/autoscaling-example/deepseek-coder-v2   False   Progressing   33m
+
+oc get lws -n autoscaling-example
+NAME                          READY   DESIRED   UP-TO-DATE   AGE
+deepseek-coder-v2-kserve-mn           1         1            29m
+
+oc get va -n autoscaling-example
+NAME                          TARGET                        MODEL                                         MIN   MAX   OPTIMIZED   METRICSREADY   AGE
+deepseek-coder-v2-kserve-va   deepseek-coder-v2-kserve-mn   deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct   1     5     1           False          34m
+
+oc get scaledObject -n autoscaling-example
+NAME                            SCALETARGETKIND                               SCALETARGETNAME               MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED   TRIGGERS     AUTHENTICATIONS            AGE
+deepseek-coder-v2-kserve-keda   leaderworkerset.x-k8s.io/v1.LeaderWorkerSet   deepseek-coder-v2-kserve-mn   1     5     True    True     Unknown    False    prometheus   ai-inference-keda-thanos   34m
 ```
