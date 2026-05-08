@@ -16,8 +16,8 @@ spec:
           - name: rhoai-operator-pull-secret
         containers:
           - name: main
-            # image: quay.io/rhoai/odh-llm-d-inference-scheduler-rhel9@sha256:9ec7153a4f17156e12810e02c6f50e8d2e9ccefa893150187b4cf3f1d1112d6e # quay.io/rhoai/odh-llm-d-inference-scheduler-rhel9:rhoai-3.4-ea.2
-            image: quay.io/rhoai/odh-llm-d-inference-scheduler-rhel9:rhoai-3.4-ea.2
+            # image: quay.io/rhoai/odh-llm-d-inference-scheduler-rhel9@sha256:9ec7153a4f17156e12810e02c6f50e8d2e9ccefa893150187b4cf3f1d1112d6e # quay.io/rhoai/odh-llm-d-inference-scheduler-rhel9:rhoai-3.4
+            image: quay.io/rhoai/odh-llm-d-inference-scheduler-rhel9:rhoai-3.4
             imagePullPolicy: Always
     route: {}
     gateway:
@@ -39,7 +39,7 @@ spec:
   template:
     containers:
       - name: main
-        image: quay.io/aipcc/rhaiis/cuda-ubi9:3.4.0-ea.2 # If using Accelerators, use the corresponding inference-image
+        image: quay.io/aipcc/rhaiis/cuda-ubi9:3.4.0 # If using Accelerators, use the corresponding inference-image
         env: # DO NOT INCLUDE THIS - for testing only
           - name: HF_OFFLINE_HUB # DO NOT INCLUDE THIS - for testing only
             value: "1" # DO NOT INCLUDE THIS - for testing only

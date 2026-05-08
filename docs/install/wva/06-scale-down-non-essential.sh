@@ -7,7 +7,6 @@ echo "Scaling down non-essential ODH deployments..."
 for deploy in \
   notebook-controller-deployment \
   odh-notebook-controller-manager \
-  odh-model-controller \
   dashboard-redirect; do
   if kubectl get deployment "$deploy" -n redhat-ods-applications &>/dev/null; then
     kubectl scale deployment "$deploy" -n redhat-ods-applications --replicas=0
@@ -24,5 +23,13 @@ kubectl scale statefulset alertmanager-main -n openshift-monitoring --replicas=0
 echo "  Scaled down openshift-monitoring/alertmanager-main"
 kubectl scale deployment rhods-operator -n redhat-ods-operator --replicas=1
 echo "  Scaled rhods-operator to 1 replica (from 3)"
+
+kubectl scale deployment odh-model-controller -n redhat-ods-applications --replicas=1
+echo "  Scaled odh-model-controller to 1 replica"
+
+if kubectl get deployment lws-controller-manager -n openshift-lws-operator &>/dev/null; then
+  kubectl scale deployment lws-controller-manager -n openshift-lws-operator --replicas=1
+  echo "  Scaled down openshift-lws-operator/lws-controller-manager"
+fi
 
 echo "Done."

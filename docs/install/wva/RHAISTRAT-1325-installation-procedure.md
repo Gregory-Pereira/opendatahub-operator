@@ -1,6 +1,6 @@
 # Enable the Workload Variant Autoscaler (WVA) for llm-d deployments
 
-You can enable intelligent autoscaling for your llm-d model deployments by configuring the workload variant autoscaler (WVA). The WVA controller is automatically deployed when the {productname-short} Operator is installed. After you configure autoscaling in the LLMInferenceService custom resource, the WVA automatically adjusts the replica count of your model server based on real-time inference traffic and AI accelerator capacity.
+You can enable intelligent autoscaling for your llm-d model deployments by configuring the workload variant autoscaler (WVA). The WVA controller is automatically deployed when the {productname-short} Operator is installed. After you configure autoscaling in the LLMInferenceService custom resource, the WVA automatically adjusts the replica count of your model server based on real-time inference traffic and AI accelerator capacity. The example below shows how to enable WVA for LLMInferenceService by configuring the `scaling` section in the resource. You can disable WVA for LLMInferenceService by not configuring `scaling` section.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ You can enable intelligent autoscaling for your llm-d model deployments by confi
 
 - You have the `Red Hat OpenShift Service Mesh 3` operator installed in your cluster. You should have this by default on any OpenShift cluster version `4.20` or later. (Note: OpenShift clusters version `4.20` created by ClusterBot don't have this operator installed by default)
 
-- (Optional if plan to use LeaderWorkerSet) You have the `Red Hat build of Leader Worker Set` operator installed in your cluster. Once this operator is installed, you will also need to create a `LeaderWorkerSetOperator`.
+- If you plan to use Wide Expert Parallelism with LeaderWorkerSet (LWS), you will also have to install LWS. For more information on how to do this, refer to the [Installing LWS to a Kubernetes Cluster](https://lws.sigs.k8s.io/docs/installation/) on installing it.
 
 - You have installed {productname-long} {vernum}.
 
@@ -182,6 +182,33 @@ clustertriggerauthentication.keda.sh/ai-inference-keda-thanos created
 
 Now KEDA will be able pull metrics from the OpenShift User Workload Monitoring stack.
 
+#### Patching the `inferenceservice-config` to use OpenShift User Workload Monitoring
+
+In the previous steps we gave KEDA the authorization and authentication it needs to query Thanos Querier in OpenShift User Workload Monitoring. But KEDA doesn't know where to find those metrics or which credentials to use — that information comes from the llmisvc controller, which reads its autoscaling configuration from the `inferenceservice-config` ConfigMap.
+
+By default, this ConfigMap has no autoscaling configuration set. We need to patch it to tell the llmisvc controller:
+
+  1. **Where** to query metrics — the Thanos Querier URL
+  2. **How** to authenticate — using the `ClusterTriggerAuthentication` resource
+     (`ai-inference-keda-thanos`) we created in the previous step
+
+To do this, we can run the a `kubectl patch` command, and then we need to cycle our `llmisvc-controller-manager` deployment, so that it can pickup our configuration changes. You can do so with the following:
+
+```bash
+oc patch configmap inferenceservice-config -n redhat-ods-applications \
+    --type=json -p '[{"op":"replace","path":"/data/autoscaling-wva-controller-config","value":"{\"prometheus\":{\"url\":\"https://thanos-querier.OpenShift-monitoring.svc.cluster.local:9091\",\"authModes\":\"bearer\",\"triggerAuthName\":\"ai-inference-keda-thanos\",\"triggerAuthKind\":\"ClusterTriggerAuthentication\"}}"}]'
+oc rollout restart deployment llmisvc-controller-manager -n redhat-ods-applications
+```
+
+This should result in the following logs:
+
+```console
+configmap/inferenceservice-config patched
+deployment.apps/llmisvc-controller-manager restarted
+```
+
+Now, when the `LLMISVC` gets created with autoscaling configurations, the `llmisvc-controller-manager` will create a KEDA `ScaledObject` with these settings embedded so KEDA knows how to connect to Thanos and authenticate its metric queries.
+
 ### Creating an Inference Stack with Autoscaling enabled
 
 Now we are ready to start applying all of our resources related to our `LLMInferenceService`. 
@@ -282,7 +309,7 @@ oc apply -f - <<'EOF'
 apiVersion: serving.kserve.io/v1alpha2
 kind: LLMInferenceService
 metadata:
-  name: autoscaling-example-llama
+  name: autoscaling-example-qwen
   namespace: autoscaling-example
   annotations:
     prometheus.io/scrape: "true"
@@ -312,7 +339,7 @@ spec:
   template:
     containers:
       - name: main
-        image: quay.io/aipcc/rhaiis/cuda-ubi9:3.4.0-ea.2 # If using Accelerators, use the corresponding inference-image
+        image: quay.io/aipcc/rhaiis/cuda-ubi9:3.4.0 # If using Accelerators, use the corresponding inference-image
         resources:
           limits:
             cpu: '4'
@@ -342,7 +369,7 @@ EOF
 
 Upon successful creation of our LLMISVC we should see the following:
 ```console
-llminferenceservice.serving.kserve.io/autoscaling-example-llama created
+llminferenceservice.serving.kserve.io/autoscaling-example-qwen created
 ```
 
 Some important pieces to note about this:
@@ -366,68 +393,11 @@ env:
 ```bash
 oc get llmisvc -n autoscaling-example
 NAME                        URL   READY   REASON   AGE
-autoscaling-example-llama         True             102s
+autoscaling-example-qwen         True             102s
 
 oc get scaledobject -n autoscaling-example
 NAME                                    SCALETARGETKIND      SCALETARGETNAME                    MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED   TRIGGERS     AUTHENTICATIONS            AGE
-autoscaling-example-llama-kserve-keda   apps/v1.Deployment   autoscaling-example-llama-kserve   1     5     True    True     False      False    prometheus   ai-inference-keda-thanos   119s
-```
-
-#### Metric relabelling mapping
-
-By default vLLM exposes metrics to the `vllm` namespace, but in Red Hat OpenShift AI (RHOAI), we re-map these to the `kserve_vllm` namespace. This means the Workload Variant Autoscaler will only be looking for the kserve namespace instances of these metrics. To enable the WVA to pick up these metrics we create a `PrometheusRule` responsible for creating aliases for them. You will need to create the following manifest:
-
-```bash
-oc apply -f - <<'EOF'
-apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: vllm-metrics-alias
-  namespace: autoscaling-example
-  labels:
-    monitoring.opendatahub.io/scrape: "true"
-spec:
-  groups:
-  - name: vllm-metric-aliases
-    interval: 15s
-    rules:
-    - record: vllm:kv_cache_usage_perc
-      expr: kserve_vllm:kv_cache_usage_perc
-    - record: vllm:num_requests_waiting
-      expr: kserve_vllm:num_requests_waiting
-    - record: vllm:num_requests_running
-      expr: kserve_vllm:num_requests_running
-    - record: vllm:cache_config_info
-      expr: kserve_vllm:cache_config_info
-    - record: vllm:request_success_total
-      expr: kserve_vllm:request_success_total
-    - record: vllm:request_generation_tokens_sum
-      expr: kserve_vllm:request_generation_tokens_sum
-    - record: vllm:request_generation_tokens_count
-      expr: kserve_vllm:request_generation_tokens_count
-    - record: vllm:request_prompt_tokens_sum
-      expr: kserve_vllm:request_prompt_tokens_sum
-    - record: vllm:request_prompt_tokens_count
-      expr: kserve_vllm:request_prompt_tokens_count
-    - record: vllm:time_to_first_token_seconds_sum
-      expr: kserve_vllm:time_to_first_token_seconds_sum
-    - record: vllm:time_to_first_token_seconds_count
-      expr: kserve_vllm:time_to_first_token_seconds_count
-    - record: vllm:time_per_output_token_seconds_sum
-      expr: kserve_vllm:time_per_output_token_seconds_sum
-    - record: vllm:time_per_output_token_seconds_count
-      expr: kserve_vllm:time_per_output_token_seconds_count
-    - record: vllm:prefix_cache_hits
-      expr: kserve_vllm:prefix_cache_hits
-    - record: vllm:prefix_cache_queries
-      expr: kserve_vllm:prefix_cache_queries
-EOF
-```
-
-If everything goes right, you should receive confirmation that your `PrometheusRule` has been created:
-
-```console
-prometheusrule.monitoring.coreos.com/vllm-metrics-alias created
+autoscaling-example-qwen-kserve-keda   apps/v1.Deployment   autoscaling-example-qwen-kserve   1     5     True    True     False      False    prometheus   ai-inference-keda-thanos   119s
 ```
 
 ## Verifying the Autoscaling Behaviour
@@ -464,11 +434,11 @@ You should see three separate JSON payloads for each:
     "instance": "10.130.3.118:8000",
     "job": "autoscaling-example/kserve-llm-isvc-vllm-engine",
     "llm_isvc_component": "workload",
-    "llm_isvc_name": "autoscaling-example-llama",
+    "llm_isvc_name": "autoscaling-example-qwen",
     "llm_isvc_role": "both",
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
     "namespace": "autoscaling-example",
-    "pod": "autoscaling-example-llama-kserve-56b64d69d-b297x",
+    "pod": "autoscaling-example-qwen-kserve-56b64d69d-b297x",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload"
   },
   "value": [
@@ -485,11 +455,11 @@ You should see three separate JSON payloads for each:
     "instance": "10.130.3.118:8000",
     "job": "autoscaling-example/kserve-llm-isvc-vllm-engine",
     "llm_isvc_component": "workload",
-    "llm_isvc_name": "autoscaling-example-llama",
+    "llm_isvc_name": "autoscaling-example-qwen",
     "llm_isvc_role": "both",
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
     "namespace": "autoscaling-example",
-    "pod": "autoscaling-example-llama-kserve-56b64d69d-b297x",
+    "pod": "autoscaling-example-qwen-kserve-56b64d69d-b297x",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload"
   },
   "value": [
@@ -506,11 +476,11 @@ You should see three separate JSON payloads for each:
     "instance": "10.130.3.118:8000",
     "job": "autoscaling-example/kserve-llm-isvc-vllm-engine",
     "llm_isvc_component": "workload",
-    "llm_isvc_name": "autoscaling-example-llama",
+    "llm_isvc_name": "autoscaling-example-qwen",
     "llm_isvc_role": "both",
     "model_name": "Qwen/Qwen2.5-7B-Instruct",
     "namespace": "autoscaling-example",
-    "pod": "autoscaling-example-llama-kserve-56b64d69d-b297x",
+    "pod": "autoscaling-example-qwen-kserve-56b64d69d-b297x",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload"
   },
   "value": [
@@ -520,8 +490,23 @@ You should see three separate JSON payloads for each:
 }
 ```
 
+### Verify Inference Scheduler Metrics From Prometheus
 **NOTE:** Currently the WVA does not currently use metrics from the inference scheduler but this is coming soon.
 
+The metrics were looking for are `inference_extension_flow_control_queue_size`, `inference_extension_flow_control_queue_size`, and `wva_desired_ratio`. We can grab those with the following
+
+```bash
+TOKEN=$(oc whoami -t)
+THANOS=$(oc get route thanos-querier -n OpenShift-monitoring -o jsonpath='{.spec.host}')
+for m in inference_extension_flow_control_queue_size inference_extension_flow_control_queue_size; do
+  curl -sk -G -H "Authorization: Bearer $TOKEN" "https://$THANOS/api/v1/query" \
+    --data-urlencode "query=${m}{exported_namespace=\"autoscaling-example\"}" \
+    | jq '.data.result[0]'
+done
+```
+You should see the following:
+```
+```
 
 ### Verify WVA is emitting metrics back to Prometheus
 
@@ -552,7 +537,7 @@ You should see the following:
     "pod": "workload-variant-autoscaler-controller-manager-774bc99447-x8l8d",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload",
     "service": "workload-variant-autoscaler-controller-manager-metrics-service",
-    "variant_name": "autoscaling-example-llama-kserve-va"
+    "variant_name": "autoscaling-example-qwen-kserve-va"
   },
   "value": [
     1775002469.694,
@@ -571,7 +556,7 @@ You should see the following:
     "pod": "workload-variant-autoscaler-controller-manager-774bc99447-x8l8d",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload",
     "service": "workload-variant-autoscaler-controller-manager-metrics-service",
-    "variant_name": "autoscaling-example-llama-kserve-va"
+    "variant_name": "autoscaling-example-qwen-kserve-va"
   },
   "value": [
     1775002470.133,
@@ -590,7 +575,7 @@ You should see the following:
     "pod": "workload-variant-autoscaler-controller-manager-774bc99447-x8l8d",
     "prometheus": "OpenShift-user-workload-monitoring/user-workload",
     "service": "workload-variant-autoscaler-controller-manager-metrics-service",
-    "variant_name": "autoscaling-example-llama-kserve-va"
+    "variant_name": "autoscaling-example-qwen-kserve-va"
   },
   "value": [
     1775002470.557,
@@ -602,13 +587,13 @@ You should see the following:
 At this point you should have the following resources that got created from your `LLMISVC`:
 
 ```bash
-k get va autoscaling-example-llama-kserve-va
+k get va autoscaling-example-qwen-kserve-va
 NAME                                  TARGET                             MODEL                      OPTIMIZED   METRICSREADY   AGE
-autoscaling-example-llama-kserve-va   autoscaling-example-llama-kserve   Qwen/Qwen2.5-7B-Instruct   1           True           81m
+autoscaling-example-qwen-kserve-va   autoscaling-example-qwen-kserve   Qwen/Qwen2.5-7B-Instruct   1           True           81m
 
 k get scaledObject -n autoscaling-example
 NAME                                    SCALETARGETKIND      SCALETARGETNAME                    MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED   TRIGGERS     AUTHENTICATIONS            AGE
-autoscaling-example-llama-kserve-keda   apps/v1.Deployment   autoscaling-example-llama-kserve   1     5     True    True     Unknown    False    prometheus   ai-inference-keda-thanos   83m
+autoscaling-example-qwen-kserve-keda   apps/v1.Deployment   autoscaling-example-qwen-kserve   1     5     True    True     Unknown    False    prometheus   ai-inference-keda-thanos   83m
 ```
 
 It should be noted for your `VariantAutoscaling` it should show `METRICSREADY=True` and your scaledObject should be showing as `READY=true`. Once the WVA controller starts reconciling the `scaledObject` it should also become `ACTIVE=True`. If you are not seeing that, your first deubgging steps should be to `describe` these resources and check their `Status` sections of their yaml.
@@ -629,7 +614,7 @@ This is the fun part; we get to watch our inference workers scale before our ver
 set -euo pipefail
 
 NS="${1:-autoscaling-example}"
-ISVC="${2:-autoscaling-example-llama}"
+ISVC="${2:-autoscaling-example-qwen}"
 CONCURRENCY="${3:-200}"
 REQUESTS="${4:-5000}"
 POD_NAME="load-test-$(date +%s)"
@@ -766,7 +751,7 @@ The following is some sample output from the benchmarking script:
 
 ```console
 === WVA Autoscaling Test ===
-URL:         https://autoscaling-example-gateway-data-science-gateway-class.autoscaling-example.svc.cluster.local/autoscaling-example/autoscaling-example-llama/v1/chat/completions
+URL:         https://autoscaling-example-gateway-data-science-gateway-class.autoscaling-example.svc.cluster.local/autoscaling-example/autoscaling-example-qwen/v1/chat/completions
 Concurrency: 200
 Requests:    5000
 
@@ -823,10 +808,10 @@ During the load you might see:
 ```console
 NAME                                                              READY   STATUS    RESTARTS      AGE
 autoscaling-example-gateway-data-science-gateway-class-66c4qvpb   1/1     Running   0             81m
-autoscaling-example-llama-kserve-56b64d69d-b297x                  1/1     Running   0             106m
-autoscaling-example-llama-kserve-56b64d69d-kvvmc                  1/1     Running   0             10m
-autoscaling-example-llama-kserve-56b64d69d-m78nz                  1/1     Running   0             7m1s
-autoscaling-example-llama-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
+autoscaling-example-qwen-kserve-56b64d69d-b297x                  1/1     Running   0             106m
+autoscaling-example-qwen-kserve-56b64d69d-kvvmc                  1/1     Running   0             10m
+autoscaling-example-qwen-kserve-56b64d69d-m78nz                  1/1     Running   0             7m1s
+autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
 load-test-1775003391                                              1/1     Running   0             10m
 ```
 
@@ -835,7 +820,353 @@ And after it should scale back to :
 ```console
 NAME                                                              READY   STATUS    RESTARTS      AGE
 autoscaling-example-gateway-data-science-gateway-class-66c4qvpb   1/1     Running   0             81m
-autoscaling-example-llama-kserve-56b64d69d-b297x                  1/1     Running   0             106m
-autoscaling-example-llama-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
+autoscaling-example-qwen-kserve-56b64d69d-b297x                  1/1     Running   0             106m
+autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
 load-test-1775003391                                              1/1     Running   0             10m
+```
+
+## Wide Expert Parallelism with LeaderWorkerSet (LWS)
+[TODO] Objects are created but still working on getting models running on GPUs thus there are `False` status still.
+
+`08c-llmisvc-lws-deepseek-lite.yaml` contains a sample `LLMInferenceService` with LWS.
+
+### Verify LLMISVC, LWS, Leader/Worker Pods, ScaledObject
+```bash
+oc get llmisvc -n autoscaling-example
+NAME                URL                                                                                                                          READY   REASON        AGE
+deepseek-coder-v2   https://openshift-ai-inference-openshift-default.openshift-ingress.svc.cluster.local/autoscaling-example/deepseek-coder-v2   False   Progressing   33m
+
+oc get lws -n autoscaling-example
+NAME                          READY   DESIRED   UP-TO-DATE   AGE
+deepseek-coder-v2-kserve-mn           1         1            29m
+
+oc get po -n autoscaling-example
+NAME                                                              READY   STATUS     RESTARTS   AGE
+   0          12m
+deepseek-coder-v2-kserve-mn-0                                     0/1     Init:0/1   0          58s
+deepseek-coder-v2-kserve-mn-0-1                                   0/1     Init:0/1   0          47s
+deepseek-coder-v2-kserve-router-scheduler-8497bfb84c-67xfw        2/2     Running    0          8m28s
+
+oc get va deepseek-coder-v2-kserve-va -n autoscaling-example
+NAME                          TARGET                        MODEL                                         MIN   MAX   OPTIMIZED   METRICSREADY   AGE
+deepseek-coder-v2-kserve-va   deepseek-coder-v2-kserve-mn   deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct   1     5     1           True           32m
+
+oc get scaledObject deepseek-coder-v2-kserve-keda -n autoscaling-example
+NAME                            SCALETARGETKIND                               SCALETARGETNAME               MIN   MAX   READY   ACTIVE   FALLBACK   PAUSED   TRIGGERS     AUTHENTICATIONS            AGE
+deepseek-coder-v2-kserve-keda   leaderworkerset.x-k8s.io/v1.LeaderWorkerSet   deepseek-coder-v2-kserve-mn   1     5     True    True     False      False    prometheus   ai-inference-keda-thanos   34m
+```
+
+### Verify our Component metrics show up in Prometheus
+We can start by ensuring that our inputs to the WVA - the inference-server metrics - show up in Prometheus.
+```bash
+TOKEN=$(oc whoami -t)
+THANOS=$(oc get route thanos-querier -n OpenShift-monitoring -o jsonpath='{.spec.host}')
+for m in num_requests_running num_requests_waiting kv_cache_usage_perc; do
+    curl -sk -G -H "Authorization: Bearer $TOKEN" "https://$THANOS/api/v1/query" \
+      --data-urlencode "query=vllm:${m}{namespace=\"autoscaling-example\"}" | \
+      jq '.data.result[0]'
+done
+```
+You should see three separate JSON payloads for each:
+```console
+{
+  "metric": {
+    "__name__": "vllm:num_requests_running",
+    "container": "main",
+    "endpoint": "8000",
+    "engine": "0",
+    "instance": "10.130.2.252:8000",
+    "job": "autoscaling-example/kserve-llm-isvc-vllm-engine-default",
+    "llm_isvc_component": "workload-leader",
+    "llm_isvc_name": "deepseek-coder-v2",
+    "llm_isvc_role": "both",
+    "model_name": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+    "namespace": "autoscaling-example",
+    "pod": "deepseek-coder-v2-kserve-mn-0",
+    "prometheus": "openshift-user-workload-monitoring/user-workload"
+  },
+  "value": [
+    1778259364.178,
+    "0"
+  ]
+}
+{
+  "metric": {
+    "__name__": "vllm:num_requests_waiting",
+    "container": "main",
+    "endpoint": "8000",
+    "engine": "0",
+    "instance": "10.130.2.252:8000",
+    "job": "autoscaling-example/kserve-llm-isvc-vllm-engine-default",
+    "llm_isvc_component": "workload-leader",
+    "llm_isvc_name": "deepseek-coder-v2",
+    "llm_isvc_role": "both",
+    "model_name": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+    "namespace": "autoscaling-example",
+    "pod": "deepseek-coder-v2-kserve-mn-0",
+    "prometheus": "openshift-user-workload-monitoring/user-workload"
+  },
+  "value": [
+    1778259365.640,
+    "0"
+  ]
+}
+{
+  "metric": {
+    "__name__": "vllm:kv_cache_usage_perc",
+    "container": "main",
+    "endpoint": "8000",
+    "engine": "0",
+    "instance": "10.130.2.252:8000",
+    "job": "autoscaling-example/kserve-llm-isvc-vllm-engine-default",
+    "llm_isvc_component": "workload-leader",
+    "llm_isvc_name": "deepseek-coder-v2",
+    "llm_isvc_role": "both",
+    "model_name": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+    "namespace": "autoscaling-example",
+    "pod": "deepseek-coder-v2-kserve-mn-0",
+    "prometheus": "openshift-user-workload-monitoring/user-workload"
+  },
+  "value": [
+    1778259367.356,
+    "0"
+  ]
+}
+```
+
+### Verify WVA is emitting metrics back to Prometheus
+
+The three metrics were looking for are `wva_current_replicas`, `wva_desired_replicas`, and `wva_desired_ratio`. We can grab those with the following
+
+```bash
+TOKEN=$(oc whoami -t)
+THANOS=$(oc get route thanos-querier -n OpenShift-monitoring -o jsonpath='{.spec.host}')
+for m in wva_desired_replicas wva_current_replicas wva_desired_ratio; do
+  curl -sk -G -H "Authorization: Bearer $TOKEN" "https://$THANOS/api/v1/query" \
+    --data-urlencode "query=${m}{exported_namespace=\"autoscaling-example\"}" \
+    | jq '.data.result[0]'
+done
+```
+
+You should see the following:
+```console
+{
+  "metric": {
+    "__name__": "wva_desired_replicas",
+    "accelerator_type": "unknown",
+    "endpoint": "https",
+    "exported_namespace": "autoscaling-example",
+    "instance": "10.131.0.48:8443",
+    "job": "workload-variant-autoscaler-controller-manager-metrics-service",
+    "namespace": "redhat-ods-applications",
+    "pod": "workload-variant-autoscaler-controller-manager-789687d7bc-hv2nq",
+    "prometheus": "openshift-user-workload-monitoring/user-workload",
+    "service": "workload-variant-autoscaler-controller-manager-metrics-service",
+    "variant_name": "deepseek-coder-v2-kserve-va"
+  },
+  "value": [
+    1778259772.223,
+    "1"
+  ]
+}
+{
+  "metric": {
+    "__name__": "wva_current_replicas",
+    "accelerator_type": "unknown",
+    "endpoint": "https",
+    "exported_namespace": "autoscaling-example",
+    "instance": "10.131.0.48:8443",
+    "job": "workload-variant-autoscaler-controller-manager-metrics-service",
+    "namespace": "redhat-ods-applications",
+    "pod": "workload-variant-autoscaler-controller-manager-789687d7bc-hv2nq",
+    "prometheus": "openshift-user-workload-monitoring/user-workload",
+    "service": "workload-variant-autoscaler-controller-manager-metrics-service",
+    "variant_name": "deepseek-coder-v2-kserve-va"
+  },
+  "value": [
+    1778259772.510,
+    "1"
+  ]
+}
+{
+  "metric": {
+    "__name__": "wva_desired_ratio",
+    "accelerator_type": "unknown",
+    "endpoint": "https",
+    "exported_namespace": "autoscaling-example",
+    "instance": "10.131.0.48:8443",
+    "job": "workload-variant-autoscaler-controller-manager-metrics-service",
+    "namespace": "redhat-ods-applications",
+    "pod": "workload-variant-autoscaler-controller-manager-789687d7bc-hv2nq",
+    "prometheus": "openshift-user-workload-monitoring/user-workload",
+    "service": "workload-variant-autoscaler-controller-manager-metrics-service",
+    "variant_name": "deepseek-coder-v2-kserve-va"
+  },
+  "value": [
+    1778259772.813,
+    "1"
+  ]
+}
+```
+### Verifying the inference worker gets Autoscaled
+In this example were going to make this experiment easier on ourselves by setting the `kvCacheThreshold` key in the `workload-variant-autoscaler-saturation-scaling-config ConfigMap` in the `redhat-ods-applications` namespace to `0.10`. We are doing this because generating enough load to see a scaling event is actually harder than one might think, this was tested on an H100 and it was handling enough load to shift the challenge to the benchmarking client side. We also chose to keep this as a script rather than an official benchmark tool for easy integration with testing with auth enabled. We have temporarily disabled it to showcase this functionality because the rate limiting is done at a per-user level.
+
+**NOTE**: Scaling + Load chosen in the script is HIGHLY dependent on the accelerators in question. This example is taken using H100s.
+```bash
+#!/bin/bash
+# Test WVA autoscaling by running a load generator pod inside the cluster
+# and watching the lws scale up.
+#
+# Usage:
+#   ./09c-test-autoscaling.sh [namespace] [isvc-name] [concurrency] [requests]
+set -euo pipefail
+
+NS="${1:-autoscaling-example}"
+ISVC="${2:-deepseek-coder-v2}"
+CONCURRENCY="${3:-2000}"
+REQUESTS="${4:-50000}"
+POD_NAME="load-test-$(date +%s)"
+CM_NAME="script-${POD_NAME}"
+
+# Resolve gateway service FQDN
+GATEWAY_SVC=$(oc get svc -n "$NS" -l gateway.networking.k8s.io/gateway-name \
+  -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+if [ -z "$GATEWAY_SVC" ]; then
+  echo "ERROR: No gateway service found in namespace $NS"
+  exit 1
+fi
+URL="https://${GATEWAY_SVC}.${NS}.svc.cluster.local/${NS}/${ISVC}/v1/chat/completions"
+
+echo "=== WVA Autoscaling Test ==="
+echo "NS:          $NS"
+echo "GATEWAY_SVC  $GATEWAY_SVC"
+echo "ISVC:        $ISVC"
+echo "URL:         $URL"
+echo "Concurrency: $CONCURRENCY"
+echo "Requests:    $REQUESTS"
+echo ""
+oc get lws "${ISVC}-kserve-mn" -n "$NS" \
+  -o jsonpath='Initial state: {.spec.replicas}/{.status.readyReplicas} ready' && echo ""
+echo ""
+
+# Cleanup on exit
+cleanup() {
+  echo ""
+  echo "Cleaning up..."
+  oc delete pod "$POD_NAME" -n "$NS" --ignore-not-found --wait=false 2>/dev/null
+  oc delete configmap "$CM_NAME" -n "$NS" --ignore-not-found 2>/dev/null
+}
+trap cleanup EXIT INT TERM
+
+# Load script that runs inside the cluster pod.
+# Uses a wrapper script so xargs passes arguments cleanly.
+read -r -d '' LOAD_SCRIPT << 'EOF' || true
+#!/bin/sh
+set -e
+URL="$1"; CONCURRENCY="$2"; REQUESTS="$3"
+echo "URL=$1, CONCURRENCY=$2, REQUESTS=$3"
+
+# Wrapper script for xargs — each invocation sends one request
+cat > /tmp/req.sh << 'REQEOF'
+#!/bin/sh
+curl -sk --max-time 600 "$1" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Request $2. Write a detailed essay about topic $2 covering history, analysis, and predictions.\"}],\"max_tokens\":256}" \
+  -o /dev/null -w "req=$2 status=%{http_code} time=%{time_total}s\n"
+REQEOF
+chmod +x /tmp/req.sh
+
+# Verify connectivity
+echo "Smoke test...."
+which curl
+curl -sk --max-time 30 "$URL" -H "Content-Type: application/json" -d '{"model":"deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct","messages":[{"role":"user","content":"Hi"}],"max_tokens":5}'
+
+STATUS=$(curl -sk --max-time 30 "$URL" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Request $2. Write a detailed essay about topic $2 covering history, analysis, and predictions.\"}],\"max_tokens\":2048}" \
+  -o /dev/null -w "%{http_code}")
+echo "Status: $STATUS"
+if [ "$STATUS" != "200" ]; then
+  echo "ERROR: Smoke test failed (HTTP $STATUS)"
+  exit 1
+fi
+sleep 5
+
+echo "Sending $REQUESTS requests ($CONCURRENCY concurrent)..."
+seq 1 "$REQUESTS" | xargs -P "$CONCURRENCY" -I{} /tmp/req.sh "$URL" {}
+echo "Done."
+EOF
+
+# Deploy load generator
+oc create configmap "$CM_NAME" -n "$NS" --from-literal=load.sh="$LOAD_SCRIPT"
+
+cat <<MANIFEST | oc apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $POD_NAME
+  namespace: $NS
+spec:
+  restartPolicy: Never
+  containers:
+  - name: load
+    image: curlimages/curl
+    command: ["sh", "/scripts/load.sh"]
+    args: ["$URL", "$CONCURRENCY", "$REQUESTS"]
+    resources:
+      requests: { cpu: "256m", memory: "500Mi" }
+      limits:   { cpu: "8", memory: "8Gi" }
+    volumeMounts:
+    - { name: script, mountPath: /scripts }
+  volumes:
+  - name: script
+    configMap: { name: $CM_NAME, defaultMode: 0755 }
+MANIFEST
+
+echo "Waiting for pod..."
+oc wait --for=condition=Ready pod/"$POD_NAME" -n "$NS" --timeout=120s 2>/dev/null || true
+sleep 2
+
+POD_PHASE=$(oc get pod "$POD_NAME" -n "$NS" -o jsonpath='{.status.phase}' 2>/dev/null)
+if [ "$POD_PHASE" = "Failed" ]; then
+  echo "ERROR: Pod failed:"
+  oc logs "$POD_NAME" -n "$NS" 2>/dev/null
+  exit 1
+fi
+
+# Stream logs in background, watch replicas in foreground
+oc logs -f "$POD_NAME" -n "$NS" 2>/dev/null &
+LOGS_PID=$!
+
+echo ""
+echo "--- Watching replicas (Ctrl+C to stop) ---"
+for _ in $(seq 1 500); do
+  replicas=$(oc get lws "${ISVC}-kserve-mn" -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null)
+  ready=$(oc get lws "${ISVC}-kserve-mn" -n "$NS" -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
+  echo "  [$(date +%H:%M:%S)] Replicas: ${replicas:-?} (${ready:-0} ready)"
+  [ "${replicas:-1}" -gt 1 ] && echo "  ** Scale-up detected! **"
+  oc get pod "$POD_NAME" -n "$NS" -o jsonpath='{.status.phase}' 2>/dev/null \
+    | grep -q "Succeeded\|Failed" && echo "  Load pod finished." && break
+  sleep 5
+done
+
+kill "$LOGS_PID" 2>/dev/null || true
+wait "$LOGS_PID" 2>/dev/null || true
+```
+During the load you might scaling up:
+```console
+NAME                                                              READY   STATUS     RESTARTS   AGE
+deepseek-coder-v2-kserve-mn-0                                     1/1     Running    0          79m
+deepseek-coder-v2-kserve-mn-0-1                                   1/1     Running    0          78m
+deepseek-coder-v2-kserve-mn-1                                     0/1     Init:0/1   0          57s
+deepseek-coder-v2-kserve-mn-1-1                                   0/1     Pending    0          57s
+```
+
+WVA variant also shows the scaling, e.g. `OPTIMIZED` is `2`:
+```console
+oc get va -n autoscaling-example
+NAME                          TARGET                        MODEL
+                 MIN   MAX   OPTIMIZED   METRICSREADY   AGE
+deepseek-coder-v2-kserve-va   deepseek-coder-v2-kserve-mn   deepseek-ai/DeepSeek-Coder-V2
+-Lite-Instruct   1     5     2           True           163m
 ```

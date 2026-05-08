@@ -52,23 +52,7 @@ oc apply -f docs/install/wva/02-connectivity-link.yaml
 Wait for the operator to be ready:
 
 ```bash
-oc get csv -n openshift-operators | grep connectivity
-```
-
-### Step 3 — Create KedaController
-
-Creates the `KedaController` CR which tells the KEDA operator to deploy the
-actual KEDA components (keda-operator, keda-metrics-apiserver,
-keda-admission). Without this, `ScaledObject` resources are ignored.
-
-```bash
-oc apply -f docs/install/wva/03-keda-controller.yaml
-```
-
-Wait for all KEDA pods to be running:
-
-```bash
-oc get pods -n openshift-keda -w
+oc get csv -n openshift-operators | grep Connectivity
 ```
 
 ### Step 4 — Deploy and Patch ODH Operator
@@ -151,9 +135,9 @@ metrics for scaling decisions. These resources set up bearer token auth:
 Apply the YAML resources:
 
 ```bash
-oc apply -f docs/install/wva/07-auth/07-service-account.yaml
-oc apply -f docs/install/wva/07-auth/08-cluster-role-binding.yaml
-oc apply -f docs/install/wva/07-auth/09-trigger-authentication.yaml
+oc apply -f docs/install/wva/07-auth/07a-service-account.yaml
+oc apply -f docs/install/wva/07-auth/07b-cluster-role-binding.yaml
+oc apply -f docs/install/wva/07-auth/07c-trigger-authentication.yaml
 ```
 
 Then patch the `inferenceservice-config` configmap so the llmisvc controller
@@ -163,7 +147,7 @@ reference:
 ```bash
 kubectl patch configmap inferenceservice-config -n opendatahub \
   --type='json' \
-  --patch-file=docs/install/wva/07-auth/10-inferenceservice-config-patch.json
+  --patch-file=docs/install/wva/07-auth/inferenceservice-config-patch.json
 ```
 
 Restart the llmisvc controller to pick up the config change:
