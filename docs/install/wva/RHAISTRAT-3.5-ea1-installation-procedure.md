@@ -824,3 +824,98 @@ autoscaling-example-qwen-kserve-56b64d69d-b297x                  1/1     Running
 autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running   0             106m
 load-test-1775003391                                              1/1     Running   0             10m
 ```
+
+## WVA Metrics for Observability
+WVA provides the following Prometheus metrics for observability:
+- `wva_models_processed`: provides the count for number of models processed in the last optimization cycle by WVA controller.
+- `wva_optimization_duration_seconds`: provides the duration (in seconds) WVA controller spent in the last optimization cycle. If the optimization cycle is without error then the metric `status` label is `success`; otherwise, it's `error`. 
+
+These metrics can be obtained as follows:
+[TODO] obtain these on a demo cluster when available
+
+```bash
+TOKEN=$(oc whoami -t)
+THANOS=$(oc get route thanos-querier -n OpenShift-monitoring -o jsonpath='{.spec.host}')
+for m in wva_models_processed wva_optimization_duration_seconds; do
+  curl -sk -G -H "Authorization: Bearer $TOKEN" "https://$THANOS/api/v1/query" \
+    --data-urlencode "query=${m}{exported_namespace=\"autoscaling-example\"}" \
+    | jq '.data.result[0]'
+done
+```
+
+```console
+ {
+    "metric": {
+      "__name__": "wva_models_processed",
+      "container": "manager",
+      "endpoint": "https",
+      "instance": "10.244.0.8:8443",
+      "job": "workload-variant-autoscaler-metrics",
+      "namespace": "workload-variant-autoscaler-system",
+      "pod": "workload-variant-autoscaler-controller-manager-85c488d659-4rsdj",
+      "service": "workload-variant-autoscaler-metrics"
+    },
+    "value": [
+      1778239109.580,
+      "0"
+    ]
+  },
+  {
+    "metric": {
+      "__name__": "wva_optimization_duration_seconds_bucket",
+      "container": "manager",
+      "endpoint": "https",
+      "instance": "10.244.0.8:8443",
+      "job": "workload-variant-autoscaler-metrics",
+      "le": "0.01",
+      "namespace": "workload-variant-autoscaler-system",
+      "pod": "workload-variant-autoscaler-controller-manager-85c488d659-4rsdj",
+      "service": "workload-variant-autoscaler-metrics",
+      "status": "success"
+    },
+    "value": [
+      1778239109.580,
+      "218"
+    ]
+  },
+  {
+    "metric": {
+      "__name__": "wva_optimization_duration_seconds_bucket",
+      "container": "manager",
+      "endpoint": "https",
+      "instance": "10.244.0.8:8443",
+      "job": "workload-variant-autoscaler-metrics",
+      "le": "0.05",
+      "namespace": "workload-variant-autoscaler-system",
+      "pod": "workload-variant-autoscaler-controller-manager-85c488d659-4rsdj",
+      "service": "workload-variant-autoscaler-metrics",
+      "status": "success"
+    },
+    "value": [
+      1778239109.580,
+      "246"
+    ]
+  },
+  {
+    "metric": {
+      "__name__": "wva_optimization_duration_seconds_bucket",
+      "container": "manager",
+      "endpoint": "https",
+      "instance": "10.244.0.8:8443",
+      "job": "workload-variant-autoscaler-metrics",
+      "le": "0.1",
+      "namespace": "workload-variant-autoscaler-system",
+      "pod": "workload-variant-autoscaler-controller-manager-85c488d659-4rsdj",
+      "service": "workload-variant-autoscaler-metrics",
+      "status": "success"
+    },
+    "value": [
+      1778239109.580,
+      "247"
+    ]
+  },
+```
+### Sample Visualization In Grafana
+As an example, the above metrics can be visualized in Grafana as follows: [NOTE: this is only for illustration, may not be suitable for official doc]
+
+![alt text](observability.png)
