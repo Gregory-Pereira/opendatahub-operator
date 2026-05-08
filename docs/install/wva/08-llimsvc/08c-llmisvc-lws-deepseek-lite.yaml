@@ -3,6 +3,12 @@ apiVersion: serving.kserve.io/v1alpha1
 kind: LLMInferenceService
 metadata:
   name: deepseek-coder-v2
+  namespace: autoscaling-example
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+    security.opendatahub.io/enable-auth: 'false'
 spec:
   model:
     # Initialize PVC following the example in /docs/samples/storage/pvc-init (recommended) or use the HuggingFace
@@ -10,15 +16,20 @@ spec:
     #uri: pvc://llm-test-pvc-deepseek
     uri: hf://deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct
     name: deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct
+  labels:
+    inference.optimization/acceleratorName: H100 # If using Accelerators, use the Name of your Accelerator
   parallelism:
-    data: 16
-    dataLocal: 8
+    data: 2
+    dataLocal: 1
     expert: true
     tensor: 1
   router:
     scheduler: { }
     route: { }
-    gateway: { }
+    gateway:
+      refs: # Reference the gateway we created
+      - name: autoscaling-example-gateway
+        namespace: autoscaling-example
   scaling:
     minReplicas: 1
     maxReplicas: 5
@@ -90,13 +101,13 @@ spec:
             cpu: 128
             ephemeral-storage: 100Gi
             memory: 512Gi
-            nvidia.com/gpu: "8"
+            nvidia.com/gpu: "2"
             # GCP: No rdma/roce_gdr resource - using TCP over gVNIC
           requests:
             cpu: 64
             ephemeral-storage: 100Gi
             memory: 256Gi
-            nvidia.com/gpu: "8"
+            nvidia.com/gpu: "2"
         livenessProbe:
           httpGet:
             path: /health
@@ -169,10 +180,10 @@ spec:
             cpu: 128
             ephemeral-storage: 100Gi
             memory: 512Gi
-            nvidia.com/gpu: "8"
+            nvidia.com/gpu: "2"
             # GCP: No rdma/roce_gdr resource - using TCP over gVNIC
           requests:
             cpu: 64
             ephemeral-storage: 100Gi
             memory: 256Gi
-            nvidia.com/gpu: "8"
+            nvidia.com/gpu: "2"
