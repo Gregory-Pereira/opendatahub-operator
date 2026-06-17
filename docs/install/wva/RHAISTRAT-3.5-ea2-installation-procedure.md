@@ -200,8 +200,10 @@ oc create ns autoscaling-example && oc project autoscaling-example
 namespace/autoscaling-example created
 Now using project "autoscaling-example" on server "https://api.qfpda-by6c4-2cb.oiah.p3.openshiftapps.com:443".
 ```
-
 #### Creating the Gateway
+As shown below, there are 2 methods for creating the gateway - both are supported. We will show both methods, and this demo will use method #1.
+
+##### Creating the Gateway - Method 1
 
 Next were going to create a gateway that will use TLS using OpenShift Service Mesh. As described in the [pre-requisites section](./RHAISTRAT-670-installation-procedure.md#prerequisites), this should come pre-installed with OpenShift 4.20+. To create our `Gateway`, we will create the following `Gateway` and `ConfigMap` manifests:
 
@@ -273,9 +275,45 @@ Some things to note about this gateway setup:
   1. We have increased the default resources of the gateway because we will be attempting to reproduce a scaling event later on with significant load generation.
   2. We have opted for a `ClusterIP` service type here because not all OCP flavours have `LoadBalancer` service type integration. `ROSA` for instance or OpenShift on IBM cloud do, while others do not. For this reason this demo is most easily reproduceable with port-forwarding for local requests, and doing load gen through a pod in the cluster against the internal service address (`port-forwards` fall down and significant concurrency).
 
+
+##### Creating the Gateway - Method 2
+```bash
+oc apply -f - <<'EOF'
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: openshift-default
+spec:
+  controllerName: openshift.io/gateway-controller/v1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: openshift-ai-inference
+  namespace: openshift-ingress
+spec:
+  gatewayClassName: openshift-default
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+EOF
+```
+
+This should result in the following confirmation message that our gateways were created:
+
+```console
+gatewayclass.gateway.networking.k8s.io/openshift-default created
+gateway.gateway.networking.k8s.io/openshift-ai-inference created
+```
+
 #### Creating and Analyzing the LLMISVC
 
-Next we will create our `LLMISVC` with autoscaling configurations enabled, as well as briefly discuss how you might alter this to fit your use case. You can apply our `LLMISVC` as so:
+Next we will create our `LLMISVC` with autoscaling configurations enabled, as well as briefly discuss how you might alter this to fit your use case. The following example shows how to create `LLMISVC` with the gateway from method #1 above. To create with method #2, the `gateway` section should be `gateway: {}`. 
+You can apply our `LLMISVC` as so:
 
 ```bash
 oc apply -f - <<'EOF'
