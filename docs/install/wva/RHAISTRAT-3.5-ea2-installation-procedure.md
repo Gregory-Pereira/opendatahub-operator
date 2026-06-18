@@ -836,13 +836,8 @@ autoscaling-example-qwen-kserve-router-scheduler-77cd5549p4w95   2/2     Running
 load-test-1775003391                                              1/1     Running   0             10m
 ```
 
-## WVA Metrics for Observability
-WVA provides the following Prometheus metrics for observability:
-- `wva_models_processed`: provides the count for number of models processed in the last optimization cycle by WVA controller.
-- `wva_optimization_duration_seconds`: provides the duration (in seconds) WVA controller spent in the last optimization cycle. If the optimization cycle is without error then the metric `status` label is `success`; otherwise, it's `error`. 
-
-These metrics can be obtained as follows:
-[TODO] obtain these on a demo cluster when available
+## Observability - WVA Metrics Observability
+WVA provides the following Prometheus metrics for observability. The metrics are documented here [WVA-metrics](https://github.com/opendatahub-io/workload-variant-autoscaler/blob/main/docs/developer-guide/prometheus.md#wva-metrics). You can obtain the metrics from a cluster as follows:
 
 ```bash
 TOKEN=$(oc whoami -t)
@@ -926,7 +921,12 @@ done
     ]
   },
 ```
-### Sample Visualization In Grafana
-As an example, the above metrics can be visualized in Grafana as follows: [NOTE: this is only for illustration, may not be suitable for official doc]
-
-![alt text](observability.png)
+### Observability - WVA Grafana Dashboard
+You can download WVA Grafana dashboard json file from here https://github.com/opendatahub-io/workload-variant-autoscaler/blob/main/deploy/grafana/operational-dashboard.json and import the dashboard to a Grafana instance in your cluster (it is assume that a Grafana instance is already installed and a **Prometheus datasource** has been added to the Grafana instance). To import the json file:
+- Log into the Grafana dashboard with a browser. You will need to find the URL and credentials for the Grafana instance in your cluster.
+- On the left-hand-side menu, click `Dashboards`.
+- Under `New` menu pull-down, click `Import`.
+- Upload the json file, or copy and paste the content of the json file.
+- If the import is succcessful, you should see a new dashboard called `WVA Operational Dashboard`. Click on the dashboard:
+  - At top of the dashboard, under `Datasource`, choose the proper datasource. All Grafana datasources are automatically loaded here.
+  - Under `namespace_label`, leave it as `exported_namespace`. See https://github.com/opendatahub-io/workload-variant-autoscaler/blob/main/docs/user-guide/monitoring.md#understanding-namespace-labels-in-metrics for more details.
