@@ -86,14 +86,17 @@ odh-segment-key-config                                      1      4h27m
 odh-trusted-ca-bundle                                       2      4h27m
 OpenShift-service-ca.crt                                    1      4h27m
 workload-variant-autoscaler-saturation-scaling-config       1      4h22m
-workload-variant-autoscaler-wva-variantautoscaling-config   13     4h22m
+workload-variant-autoscaler-manager-config                  13     4h22m
 ```
 
 Of these the only config we should be touching that is related to autoscaling is the `workload-variant-autoscaler-saturation-scaling-config` `ConfigMap` which we will be editing later in this guide. For now we can verify that its contents is consistent with what we expect to see for default scaling configurations for WVA:
 
 ```bash
 oc get cm workload-variant-autoscaler-saturation-scaling-config -n redhat-ods-applications -o yaml | yq .data.default
-
+# Remove this list (and leave analyzerName unset) to fall back to the V1
+# percentage-based analyzer.
+analyzers:
+  - name: saturation
 kvCacheThreshold: 0.80
 queueLengthThreshold: 5
 kvSpareTrigger: 0.1
@@ -922,7 +925,7 @@ done
   },
 ```
 ### Observability - WVA Grafana Dashboard
-You can download WVA Grafana dashboard json file from here https://github.com/opendatahub-io/workload-variant-autoscaler/blob/main/deploy/grafana/operational-dashboard.json and import the dashboard to a Grafana instance in your cluster (it is assume that a Grafana instance is already installed and a **Prometheus datasource** has been added to the Grafana instance). To import the json file:
+You can download WVA Grafana dashboard json file from [here](https://github.com/red-hat-data-services/workload-variant-autoscaler/blob/rhoai-3.5-ea.2/deploy/grafana/operational-dashboard.json) and import the dashboard to a Grafana instance in your cluster (it is assume that a Grafana instance is already installed and a **Prometheus datasource** has been added to the Grafana instance). To import the json file:
 - Log into the Grafana dashboard with a browser. You will need to find the URL and credentials for the Grafana instance in your cluster.
 - On the left-hand-side menu, click `Dashboards`.
 - Under `New` menu pull-down, click `Import`.
